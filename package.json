@@ -1,0 +1,29 @@
+{
+  "name": "pseudolab",
+  "version": "1.0.0",
+  "description": "A single-file web editor, runner and trainer for Cambridge International AS & A Level (9618) pseudocode.",
+  "homepage": "https://github.com/mikezzx2009/pseudolab",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node test/run_tests.js && node test/verify_content.js",
+    "test:ui": "npm install --no-save jsdom && node test/dom_test.js"
+  },
+  "keywords": [
+    "pseudocode",
+    "cambridge",
+    "cie",
+    "9618",
+    "a-level",
+    "computer-science",
+    "interpreter",
+    "education",
+    "learning"
+  ],
+  "author": "Mike",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mikezzx2009/pseudolab.git"
+  },
+  "private": false
+}

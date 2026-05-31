@@ -1,0 +1,13 @@
+# dependencies (only used for the optional UI test)
+node_modules/
+package-lock.json
+
+# build output of the Pages workflow
+_site/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/

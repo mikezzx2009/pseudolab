@@ -1,0 +1,3080 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PseudoLab — CIE Pseudocode Editor & Trainer</title>
+<style>
+/* ===================== PseudoLab styles ===================== */
+:root {
+  --bg: #0f1420;
+  --bg-2: #151b2b;
+  --panel: #1a2236;
+  --panel-2: #212c45;
+  --border: #2b3754;
+  --text: #e6ecf6;
+  --text-dim: #9fb0cc;
+  --text-faint: #6b7c9c;
+  --accent: #4fd1c5;
+  --accent-2: #6c8cff;
+  --green: #51cf66;
+  --red: #ff6b6b;
+  --amber: #ffd43b;
+  --kw: #ff8fb1;
+  --type: #7fd1ff;
+  --str: #b6e3a8;
+  --num: #ffcf8f;
+  --comment: #6b7c9c;
+  --fn: #d6a3ff;
+  --op: #9fb0cc;
+  --mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas, 'Courier New', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --radius: 10px;
+  --shadow: 0 6px 24px rgba(0,0,0,.35);
+}
+[data-theme="light"] {
+  --bg: #eef1f7;
+  --bg-2: #e3e8f2;
+  --panel: #ffffff;
+  --panel-2: #f3f6fc;
+  --border: #d3dbea;
+  --text: #1a2236;
+  --text-dim: #4b5b78;
+  --text-faint: #8190ad;
+  --accent: #0d9488;
+  --accent-2: #3b5bdb;
+  --kw: #c2185b;
+  --type: #0277bd;
+  --str: #2e7d32;
+  --num: #b5670f;
+  --comment: #8190ad;
+  --fn: #7b3ff2;
+  --op: #4b5b78;
+  --shadow: 0 6px 24px rgba(40,60,100,.14);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; }
+::selection { background: rgba(108,140,255,.35); }
+
+/* layout */
+.app { display: flex; flex-direction: column; height: 100vh; }
+.topbar {
+  display: flex; align-items: center; gap: 18px;
+  padding: 0 18px; height: 56px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; letter-spacing: .2px; }
+.brand .logo {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  display: grid; place-items: center; color: #0b1020; font-weight: 800; font-size: 15px;
+}
+.brand small { color: var(--text-faint); font-weight: 500; font-size: 11px; }
+
+.tabs { display: flex; gap: 4px; margin-left: 8px; }
+.tab {
+  background: transparent; border: none; color: var(--text-dim);
+  padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13.5px;
+}
+.tab:hover { background: var(--panel); color: var(--text); }
+.tab.active { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+
+.spacer { flex: 1; }
+.icon-btn {
+  background: var(--panel); border: 1px solid var(--border); color: var(--text-dim);
+  width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 15px;
+}
+.icon-btn:hover { color: var(--text); }
+
+.view { flex: 1; overflow: hidden; display: none; }
+.view.active { display: flex; }
+
+/* ---------- editor widget ---------- */
+.editor-shell { display: flex; flex-direction: column; min-height: 0; }
+.toolbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 12px; background: var(--bg-2); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--panel); border: 1px solid var(--border); color: var(--text);
+  padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;
+}
+.btn:hover { border-color: var(--accent-2); }
+.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #08111f; border: none; }
+.btn.primary:hover { filter: brightness(1.07); }
+.btn.green { background: var(--green); color: #08220f; border: none; }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: .5; cursor: default; }
+select.btn { -webkit-appearance: none; appearance: none; padding-right: 28px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%), linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 16px, calc(100% - 10px) 16px; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+
+.editor {
+  display: flex; min-height: 0; flex: 1;
+  background: var(--panel); position: relative; overflow: hidden;
+}
+.gutter {
+  flex-shrink: 0; width: 52px; padding: 12px 8px 12px 0;
+  text-align: right; color: var(--text-faint);
+  font-family: var(--mono); font-size: 13px; line-height: 1.55;
+  background: var(--bg-2); border-right: 1px solid var(--border);
+  overflow: hidden; user-select: none; white-space: pre;
+}
+.code-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+.code-wrap pre.hl, .code-wrap textarea {
+  margin: 0; position: absolute; inset: 0;
+  padding: 12px 14px;
+  font-family: var(--mono); font-size: 13px; line-height: 1.55;
+  white-space: pre; tab-size: 3; -moz-tab-size: 3;
+  border: 0; overflow: auto;
+}
+.code-wrap pre.hl { color: var(--text); pointer-events: none; z-index: 1; }
+.code-wrap textarea {
+  z-index: 2; background: transparent; color: transparent; caret-color: var(--accent);
+  resize: none; outline: none;
+}
+.code-wrap textarea::placeholder { color: var(--text-faint); }
+
+/* syntax colors */
+.t-kw { color: var(--kw); font-weight: 600; }
+.t-type { color: var(--type); }
+.t-str { color: var(--str); }
+.t-num { color: var(--num); }
+.t-com { color: var(--comment); font-style: italic; }
+.t-fn { color: var(--fn); }
+.t-op { color: var(--op); }
+.t-bool { color: var(--num); font-weight: 600; }
+
+/* ---------- editor view split ---------- */
+#view-editor { width: 100%; }
+.split { display: flex; width: 100%; min-height: 0; }
+.split .left { flex: 1.4; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--border); }
+.split .right { flex: 1; display: flex; flex-direction: column; min-width: 320px; }
+
+.io-tabs { display: flex; gap: 4px; padding: 8px 10px; background: var(--bg-2); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.io-tab { background: transparent; border: none; color: var(--text-dim); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12.5px; }
+.io-tab.active { background: var(--panel-2); color: var(--text); }
+.io-panel { flex: 1; min-height: 0; overflow: auto; display: none; flex-direction: column; }
+.io-panel.active { display: flex; }
+
+.console {
+  flex: 1; margin: 0; padding: 14px 16px; overflow: auto;
+  font-family: var(--mono); font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+  background: var(--panel);
+}
+.console .ln-out { color: var(--text); }
+.console .ln-err { color: var(--red); }
+.console .ln-info { color: var(--text-faint); font-style: italic; }
+.console .ln-prompt { color: var(--accent); }
+.console:empty::before { content: "Output appears here. Press Run ▶ or Ctrl/⌘+Enter."; color: var(--text-faint); font-style: italic; }
+
+.io-area {
+  flex: 1; width: 100%; border: 0; resize: none; outline: none;
+  background: var(--panel); color: var(--text);
+  font-family: var(--mono); font-size: 13px; line-height: 1.55; padding: 12px 14px;
+}
+.io-hint { padding: 8px 14px; color: var(--text-faint); font-size: 12px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
+
+/* ---------- learn / practice layout ---------- */
+.with-sidebar { display: flex; width: 100%; min-height: 0; }
+.sidebar {
+  width: 290px; flex-shrink: 0; border-right: 1px solid var(--border);
+  background: var(--bg-2); overflow: auto; padding: 12px;
+}
+.level-filter { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.chip {
+  border: 1px solid var(--border); background: var(--panel); color: var(--text-dim);
+  padding: 5px 11px; border-radius: 20px; cursor: pointer; font-size: 12px; font-weight: 600;
+}
+.chip.active { background: var(--accent-2); color: #08111f; border-color: transparent; }
+
+.lesson-group { margin-bottom: 14px; }
+.lesson-group h4 {
+  margin: 6px 4px 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint);
+}
+.nav-item {
+  padding: 9px 12px; border-radius: 8px; cursor: pointer; color: var(--text-dim);
+  font-size: 13px; margin-bottom: 3px; border: 1px solid transparent;
+}
+.nav-item:hover { background: var(--panel); color: var(--text); }
+.nav-item.active { background: var(--panel-2); color: var(--text); border-color: var(--border); }
+.nav-item .topic { display: block; font-size: 11px; color: var(--text-faint); }
+.nav-item .badge { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: var(--panel); margin-left: 6px; }
+.nav-item.done .topic::after { content: " ✓ solved"; color: var(--green); }
+
+.content-pane { flex: 1; overflow: auto; min-width: 0; }
+.content-inner { max-width: 860px; margin: 0 auto; padding: 28px 34px 60px; }
+.content-inner h1 { font-size: 24px; margin: 0 0 4px; }
+.content-inner .eyebrow { color: var(--accent); font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.content-inner h2 { font-size: 18px; margin-top: 28px; }
+.lesson-body p { color: var(--text); }
+.lesson-body ul { color: var(--text); padding-left: 22px; }
+.lesson-body li { margin: 4px 0; }
+.lesson-body code { background: var(--bg-2); padding: 1.5px 6px; border-radius: 5px; font-family: var(--mono); font-size: 12.5px; color: var(--type); }
+.lesson-body pre.syntax {
+  background: var(--bg-2); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  padding: 12px 14px; border-radius: 8px; overflow: auto; font-family: var(--mono); font-size: 12.5px; color: var(--text);
+}
+.lesson-body .tip {
+  background: rgba(79,209,197,.08); border: 1px solid rgba(79,209,197,.3);
+  border-radius: 8px; padding: 10px 14px; margin: 16px 0; color: var(--text); font-size: 13px;
+}
+.lesson-body .tip code { background: rgba(0,0,0,.2); }
+
+.example-card { margin-top: 22px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.example-card .ec-head { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
+.example-card .ec-head span { font-weight: 600; font-size: 12px; color: var(--text-dim); }
+.example-card pre.code-block { margin: 0; padding: 14px 16px; overflow: auto; font-family: var(--mono); font-size: 13px; line-height: 1.55; background: var(--panel); white-space: pre; }
+
+/* practice specifics */
+.q-prompt { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 16px; }
+.q-prompt p { margin: 6px 0; }
+.q-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.q-meta .badge { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: var(--panel-2); color: var(--text-dim); font-weight: 600; }
+.practice-editor-wrap { display: flex; flex-direction: column; height: 340px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.grade-result { margin-top: 14px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); display: none; }
+.grade-result.show { display: block; }
+.grade-banner { padding: 12px 16px; font-weight: 700; }
+.grade-banner.ok { background: rgba(81,207,102,.14); color: var(--green); }
+.grade-banner.bad { background: rgba(255,107,107,.12); color: var(--red); }
+.grade-cases { padding: 10px 16px; background: var(--panel); }
+.case-row { display: flex; gap: 10px; align-items: baseline; font-family: var(--mono); font-size: 12.5px; padding: 4px 0; border-bottom: 1px dashed var(--border); }
+.case-row:last-child { border-bottom: none; }
+.case-row .res-ok { color: var(--green); } .case-row .res-bad { color: var(--red); }
+.diff-box { margin-top: 8px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
+.diff-box .lbl { color: var(--text-faint); }
+.hint-box, .solution-box { margin-top: 12px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: none; }
+.hint-box.show, .solution-box.show { display: block; }
+.solution-box pre { margin: 8px 0 0; font-family: var(--mono); font-size: 12.5px; white-space: pre; overflow: auto; }
+
+/* reference */
+.ref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: 14px; }
+.ref-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.ref-card h3 { margin: 0 0 8px; font-size: 14px; color: var(--accent); }
+.ref-card table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ref-card td { padding: 4px 6px; vertical-align: top; border-bottom: 1px solid var(--border); }
+.ref-card td:first-child { font-family: var(--mono); color: var(--type); white-space: nowrap; }
+.ref-card tr:last-child td { border-bottom: none; }
+
+.empty-state { color: var(--text-faint); text-align: center; padding: 60px 20px; }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@media (max-width: 820px) {
+  .split { flex-direction: column; }
+  .split .left { border-right: none; border-bottom: 1px solid var(--border); }
+  .sidebar { width: 220px; }
+  .tabs .tab { padding: 8px 9px; }
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">P</div>
+      <div>PseudoLab <small>Cambridge AS &amp; A Level 9618 · pseudocode</small></div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-view="editor">Playground</button>
+      <button class="tab" data-view="learn">Learn</button>
+      <button class="tab" data-view="practice">Practice</button>
+      <button class="tab" data-view="reference">Reference</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="themeToggle" title="Toggle light / dark">◐</button>
+  </div>
+  <div class="view active" id="view-editor"></div>
+  <div class="view" id="view-learn"></div>
+  <div class="view" id="view-practice"></div>
+  <div class="view" id="view-reference"></div>
+</div>
+<script>
+/* ============================================================================
+ * PseudoLab Engine
+ * A tree-walking interpreter for Cambridge (CIE) pseudocode.
+ * Targets Cambridge International AS & A Level Computer Science (9618)
+ * pseudocode, with a few lenient extras so most exam-style code runs.
+ *
+ * Works in both the browser (attaches to window.PseudoEngine) and Node
+ * (module.exports) so the same source can be unit-tested.
+ * ==========================================================================*/
+(function (global) {
+  'use strict';
+
+  /* ------------------------------------------------------------------ *
+   * Errors
+   * ------------------------------------------------------------------ */
+  function PseudoError(message, line) {
+    this.name = 'PseudoError';
+    this.message = message;
+    this.line = line || null;
+  }
+  PseudoError.prototype = Object.create(Error.prototype);
+
+  function err(msg, line) { throw new PseudoError(msg, line); }
+
+  /* ------------------------------------------------------------------ *
+   * Character normalisation
+   * Exam PDFs use typographic characters; map them to ASCII equivalents.
+   * ------------------------------------------------------------------ */
+  function normalizeSource(src) {
+    return src
+      .replace(/←/g, '<-')   // ← assignment
+      .replace(/[−–—]/g, '-') // minus sign / en / em dash
+      .replace(/×/g, '*')   // ×
+      .replace(/÷/g, '/')   // ÷
+      .replace(/≤/g, '<=')  // ≤
+      .replace(/≥/g, '>=')  // ≥
+      .replace(/≠/g, '<>')  // ≠
+      .replace(/[“”]/g, '"')          // “ ”
+      .replace(/[‘’Ꞌꞌ]/g, "'") // ‘ ’ saltillo
+      .replace(/ /g, ' ')   // non-breaking space
+      .replace(/\t/g, '   ');    // tabs -> 3 spaces
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Lexer
+   * ------------------------------------------------------------------ */
+  var KEYWORDS = {};
+  ['DECLARE','CONSTANT','ARRAY','OF',
+   'INTEGER','REAL','CHAR','STRING','BOOLEAN','DATE',
+   'IF','THEN','ELSE','ENDIF',
+   'CASE','OTHERWISE','ENDCASE',
+   'FOR','TO','STEP','NEXT',
+   'WHILE','DO','ENDWHILE',
+   'REPEAT','UNTIL',
+   'PROCEDURE','ENDPROCEDURE','FUNCTION','RETURNS','RETURN','ENDFUNCTION','CALL','BYREF','BYVAL',
+   'INPUT','OUTPUT','PRINT',
+   'TYPE','ENDTYPE','SET','DEFINE',
+   'DIV','MOD','AND','OR','NOT',
+   'OPENFILE','READFILE','WRITEFILE','CLOSEFILE','SEEK','GETRECORD','PUTRECORD',
+   'CLASS','ENDCLASS','INHERITS','PUBLIC','PRIVATE','NEW','SUPER'
+  ].forEach(function (k) { KEYWORDS[k] = true; });
+
+  function tokenize(src) {
+    var s = normalizeSource(src);
+    var tokens = [];
+    var i = 0, line = 1, n = s.length;
+    var depth = 0; // () and [] nesting -> suppress NL so statements can wrap
+
+    function push(type, value) { tokens.push({ type: type, value: value, line: line }); }
+
+    while (i < n) {
+      var c = s[i];
+
+      // newline
+      if (c === '\n') {
+        if (depth <= 0) {
+          // collapse consecutive newlines into one NL token
+          if (tokens.length && tokens[tokens.length - 1].type !== 'NL') push('NL', '\n');
+        }
+        line++; i++; continue;
+      }
+      if (c === '\r') { i++; continue; }
+      if (c === ' ') { i++; continue; }
+
+      // comment //...
+      if (c === '/' && s[i + 1] === '/') {
+        while (i < n && s[i] !== '\n') i++;
+        continue;
+      }
+
+      // string literal
+      if (c === '"') {
+        var str = ''; i++;
+        while (i < n && s[i] !== '"' && s[i] !== '\n') { str += s[i]; i++; }
+        if (s[i] !== '"') err('Unterminated string literal', line);
+        i++; push('STR', str); continue;
+      }
+
+      // char literal
+      if (c === "'") {
+        i++;
+        var ch = '';
+        while (i < n && s[i] !== "'" && s[i] !== '\n') { ch += s[i]; i++; }
+        if (s[i] !== "'") err('Unterminated character literal', line);
+        i++;
+        push('CHAR', ch); continue;
+      }
+
+      // number
+      if (c >= '0' && c <= '9') {
+        var num = '';
+        while (i < n && s[i] >= '0' && s[i] <= '9') { num += s[i]; i++; }
+        if (s[i] === '.' && s[i + 1] >= '0' && s[i + 1] <= '9') {
+          num += '.'; i++;
+          while (i < n && s[i] >= '0' && s[i] <= '9') { num += s[i]; i++; }
+          push('REAL', parseFloat(num));
+        } else {
+          push('INT', parseInt(num, 10));
+        }
+        continue;
+      }
+
+      // identifier / keyword
+      if (/[A-Za-z_]/.test(c)) {
+        var word = '';
+        while (i < n && /[A-Za-z0-9_]/.test(s[i])) { word += s[i]; i++; }
+        var up = word.toUpperCase();
+        if (up === 'TRUE') { push('BOOL', true); }
+        else if (up === 'FALSE') { push('BOOL', false); }
+        else if (KEYWORDS[up]) { push('KW', up); }
+        else { push('IDENT', word); }
+        continue;
+      }
+
+      // multi-char operators
+      var two = s.substr(i, 2);
+      if (two === '<-') {
+        if (s[i + 2] === '-') { push('ASSIGN', '<--'); i += 3; }
+        else { push('ASSIGN', '<-'); i += 2; }
+        continue;
+      }
+      if (two === '<=') { push('<=', two); i += 2; continue; }
+      if (two === '>=') { push('>=', two); i += 2; continue; }
+      if (two === '<>') { push('<>', two); i += 2; continue; }
+
+      // single-char tokens
+      switch (c) {
+        case '(': depth++; push('(', c); i++; continue;
+        case ')': depth--; push(')', c); i++; continue;
+        case '[': depth++; push('[', c); i++; continue;
+        case ']': depth--; push(']', c); i++; continue;
+        case '+': case '-': case '*': case '/':
+          push(c, c); i++; continue;
+        case '=': push('=', c); i++; continue;
+        case '<': push('<', c); i++; continue;
+        case '>': push('>', c); i++; continue;
+        case '&': push('&', c); i++; continue;
+        case '^': push('^', c); i++; continue;
+        case ',': push(',', c); i++; continue;
+        case ':': push(':', c); i++; continue;
+        case '.': push('.', c); i++; continue;
+      }
+      err("Unexpected character '" + c + "'", line);
+    }
+    push('NL', '\n');
+    push('EOF', null);
+    return tokens;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Parser  (recursive descent -> AST of plain objects)
+   * ------------------------------------------------------------------ */
+  function Parser(tokens) {
+    this.toks = tokens;
+    this.p = 0;
+  }
+  Parser.prototype.peek = function (k) { return this.toks[this.p + (k || 0)]; };
+  Parser.prototype.next = function () { return this.toks[this.p++]; };
+  Parser.prototype.atEnd = function () { return this.peek().type === 'EOF'; };
+  Parser.prototype.is = function (type) { return this.peek().type === type; };
+  Parser.prototype.isKw = function (w) { var t = this.peek(); return t.type === 'KW' && t.value === w; };
+  Parser.prototype.line = function () { return this.peek().line; };
+  Parser.prototype.eat = function (type) {
+    if (this.peek().type !== type) err("Expected '" + type + "' but found '" + this.describe(this.peek()) + "'", this.line());
+    return this.next();
+  };
+  Parser.prototype.eatKw = function (w) {
+    if (!this.isKw(w)) err("Expected '" + w + "' but found '" + this.describe(this.peek()) + "'", this.line());
+    return this.next();
+  };
+  Parser.prototype.describe = function (t) {
+    if (!t) return 'EOF';
+    if (t.type === 'KW') return t.value;
+    if (t.type === 'NL') return 'end of line';
+    if (t.type === 'EOF') return 'end of program';
+    return String(t.value);
+  };
+  Parser.prototype.skipNL = function () { while (this.is('NL')) this.next(); };
+  Parser.prototype.endStmt = function () {
+    // a simple statement ends at NL or EOF
+    if (this.is('NL')) this.next();
+    else if (!this.is('EOF')) {
+      // allow trailing on same constructs handled by callers; otherwise error
+    }
+  };
+
+  Parser.prototype.parseProgram = function () {
+    var stmts = [];
+    this.skipNL();
+    while (!this.atEnd()) {
+      stmts.push(this.parseStatement());
+      this.skipNL();
+    }
+    return { type: 'Program', body: stmts };
+  };
+
+  // Parse a block of statements until one of the terminator keywords is seen.
+  Parser.prototype.parseBlock = function (terminators) {
+    var stmts = [];
+    this.skipNL();
+    while (!this.atEnd()) {
+      var t = this.peek();
+      if (t.type === 'KW' && terminators.indexOf(t.value) !== -1) break;
+      stmts.push(this.parseStatement());
+      this.skipNL();
+    }
+    return stmts;
+  };
+
+  Parser.prototype.parseStatement = function () {
+    var t = this.peek();
+    if (t.type === 'KW') {
+      switch (t.value) {
+        case 'DECLARE': return this.parseDeclare();
+        case 'CONSTANT': return this.parseConstant();
+        case 'IF': return this.parseIf();
+        case 'CASE': return this.parseCase();
+        case 'FOR': return this.parseFor();
+        case 'WHILE': return this.parseWhile();
+        case 'REPEAT': return this.parseRepeat();
+        case 'PROCEDURE': return this.parseProcedure(null);
+        case 'FUNCTION': return this.parseFunction(null);
+        case 'CALL': return this.parseCall();
+        case 'RETURN': return this.parseReturn();
+        case 'INPUT': return this.parseInput();
+        case 'OUTPUT': case 'PRINT': return this.parseOutput();
+        case 'TYPE': return this.parseType();
+        case 'DEFINE': return this.parseDefine();
+        case 'CLASS': return this.parseClass();
+        case 'OPENFILE': return this.parseOpenFile();
+        case 'READFILE': return this.parseReadFile();
+        case 'WRITEFILE': return this.parseWriteFile();
+        case 'CLOSEFILE': return this.parseCloseFile();
+        case 'SEEK': return this.parseSeek();
+        case 'GETRECORD': return this.parseGetRecord();
+        case 'PUTRECORD': return this.parsePutRecord();
+        case 'PUBLIC': case 'PRIVATE': {
+          // access-modified member at top level (rare) e.g. inside class handled separately
+          var acc = this.next().value;
+          if (this.isKw('PROCEDURE')) return this.parseProcedure(acc);
+          if (this.isKw('FUNCTION')) return this.parseFunction(acc);
+          // declaration with access modifier
+          return this.parseDeclare(acc);
+        }
+      }
+    }
+    // assignment or expression-statement
+    return this.parseAssignmentOrExpr();
+  };
+
+  Parser.prototype.parseTypeSpec = function () {
+    if (this.isKw('ARRAY')) {
+      var line = this.line();
+      this.next();
+      this.eat('[');
+      var dims = [];
+      do {
+        var lo = this.parseExpr();
+        this.eat(':');
+        var hi = this.parseExpr();
+        dims.push({ low: lo, high: hi });
+      } while (this.is(',') && this.next());
+      this.eat(']');
+      this.eatKw('OF');
+      var of = this.parseTypeSpec();
+      return { kind: 'array', dims: dims, of: of, line: line };
+    }
+    var tk = this.peek();
+    if (tk.type === 'KW' && ['INTEGER','REAL','CHAR','STRING','BOOLEAN','DATE'].indexOf(tk.value) !== -1) {
+      this.next();
+      return { kind: 'primitive', name: tk.value };
+    }
+    if (tk.type === 'IDENT') {
+      this.next();
+      return { kind: 'named', name: tk.value };
+    }
+    err("Expected a data type but found '" + this.describe(tk) + "'", this.line());
+  };
+
+  Parser.prototype.parseDeclare = function (access) {
+    var line = this.line();
+    this.eatKw('DECLARE');
+    var names = [this.eat('IDENT').value];
+    while (this.is(',')) { this.next(); names.push(this.eat('IDENT').value); }
+    this.eat(':');
+    var typeSpec = this.parseTypeSpec();
+    this.endStmt();
+    return { type: 'Declare', names: names, typeSpec: typeSpec, access: access || null, line: line };
+  };
+
+  Parser.prototype.parseConstant = function () {
+    var line = this.line();
+    this.eatKw('CONSTANT');
+    var name = this.eat('IDENT').value;
+    if (this.is('=')) this.next();
+    else if (this.is('ASSIGN')) this.next();
+    else err("Expected '=' in CONSTANT declaration", this.line());
+    var expr = this.parseExpr();
+    this.endStmt();
+    return { type: 'Constant', name: name, expr: expr, line: line };
+  };
+
+  Parser.prototype.parseIf = function () {
+    var line = this.line();
+    this.eatKw('IF');
+    var cond = this.parseExpr();
+    this.skipNL();
+    this.eatKw('THEN');
+    var thenB = this.parseBlock(['ELSE', 'ENDIF']);
+    var elseB = null;
+    if (this.isKw('ELSE')) { this.next(); elseB = this.parseBlock(['ENDIF']); }
+    this.eatKw('ENDIF');
+    this.endStmt();
+    return { type: 'If', cond: cond, then: thenB, else: elseB, line: line };
+  };
+
+  Parser.prototype.parseCase = function () {
+    var line = this.line();
+    this.eatKw('CASE');
+    this.eatKw('OF');
+    var selector = this.parseExpr();
+    this.skipNL();
+    var clauses = [];
+    var otherwise = null;
+    while (!this.atEnd() && !this.isKw('ENDCASE')) {
+      this.skipNL();
+      if (this.isKw('ENDCASE')) break;
+      if (this.isKw('OTHERWISE')) {
+        this.next();
+        if (this.is(':')) this.next();
+        otherwise = this.parseCaseBody();
+        continue;
+      }
+      // parse a value, possibly a range  v1 TO v2
+      var v1 = this.parseExpr();
+      var v2 = null;
+      if (this.isKw('TO')) { this.next(); v2 = this.parseExpr(); }
+      this.eat(':');
+      var body = this.parseCaseBody();
+      clauses.push({ value: v1, to: v2, body: body });
+    }
+    this.eatKw('ENDCASE');
+    this.endStmt();
+    return { type: 'Case', selector: selector, clauses: clauses, otherwise: otherwise, line: line };
+  };
+
+  // statements of a case clause: any statements until next label / OTHERWISE / ENDCASE
+  Parser.prototype.parseCaseBody = function () {
+    var stmts = [];
+    this.skipNL();
+    while (!this.is('EOF') && !this.isKw('ENDCASE') && !this.isKw('OTHERWISE') && !this.looksLikeCaseLabel()) {
+      stmts.push(this.parseStatement());
+      this.skipNL();
+    }
+    return stmts;
+  };
+
+  // Heuristic: a case label line has a top-level ':' before any NL,
+  // does not start with a statement keyword and contains no ASSIGN before ':'.
+  Parser.prototype.looksLikeCaseLabel = function () {
+    var t = this.peek();
+    if (t.type === 'KW') {
+      // values may be enum identifiers (IDENT) or literals only; keywords starting a stmt => not a label
+      if (['IF','CASE','FOR','WHILE','REPEAT','PROCEDURE','FUNCTION','CALL','RETURN',
+           'INPUT','OUTPUT','PRINT','DECLARE','CONSTANT','TYPE','DEFINE','CLASS',
+           'OPENFILE','READFILE','WRITEFILE','CLOSEFILE','SEEK','GETRECORD','PUTRECORD',
+           'PUBLIC','PRIVATE','NOT','ENDCASE','OTHERWISE'].indexOf(t.value) !== -1) return false;
+    }
+    var j = this.p;
+    while (this.toks[j] && this.toks[j].type !== 'NL' && this.toks[j].type !== 'EOF') {
+      var tt = this.toks[j].type;
+      if (tt === 'ASSIGN') return false;
+      if (tt === ':') return true;
+      j++;
+    }
+    return false;
+  };
+
+  Parser.prototype.parseFor = function () {
+    var line = this.line();
+    this.eatKw('FOR');
+    var varName = this.eat('IDENT').value;
+    this.eat('ASSIGN');
+    var start = this.parseExpr();
+    this.eatKw('TO');
+    var end = this.parseExpr();
+    var step = null;
+    if (this.isKw('STEP')) { this.next(); step = this.parseExpr(); }
+    var body = this.parseBlock(['NEXT', 'ENDFOR']);
+    if (this.isKw('NEXT')) {
+      this.next();
+      if (this.is('IDENT')) this.next(); // optional identifier
+    } else if (this.peek().type === 'KW' && this.peek().value === 'ENDFOR') {
+      this.next();
+    } else err("Expected NEXT to close FOR loop", this.line());
+    this.endStmt();
+    return { type: 'For', varName: varName, start: start, end: end, step: step, body: body, line: line };
+  };
+
+  Parser.prototype.parseWhile = function () {
+    var line = this.line();
+    this.eatKw('WHILE');
+    var cond = this.parseExpr();
+    if (this.isKw('DO')) this.next();       // tolerate an optional DO after the condition
+    var body = this.parseBlock(['ENDWHILE']);
+    this.eatKw('ENDWHILE');
+    this.endStmt();
+    return { type: 'While', cond: cond, body: body, line: line };
+  };
+
+  Parser.prototype.parseRepeat = function () {
+    var line = this.line();
+    this.eatKw('REPEAT');
+    var body = this.parseBlock(['UNTIL']);
+    this.eatKw('UNTIL');
+    var cond = this.parseExpr();
+    this.endStmt();
+    return { type: 'Repeat', body: body, cond: cond, line: line };
+  };
+
+  Parser.prototype.parseParams = function () {
+    var params = [];
+    this.eat('(');
+    var mode = 'BYVAL';
+    if (!this.is(')')) {
+      do {
+        if (this.isKw('BYREF')) { mode = 'BYREF'; this.next(); }
+        else if (this.isKw('BYVAL')) { mode = 'BYVAL'; this.next(); }
+        var pname = this.eat('IDENT').value;
+        this.eat(':');
+        var ptype = this.parseTypeSpec();
+        params.push({ name: pname, typeSpec: ptype, mode: mode });
+      } while (this.is(',') && this.next());
+    }
+    this.eat(')');
+    return params;
+  };
+
+  // a definition name may be an identifier or the keyword NEW (constructor)
+  Parser.prototype.parseDefName = function () {
+    if (this.isKw('NEW')) { this.next(); return 'NEW'; }
+    return this.eat('IDENT').value;
+  };
+
+  Parser.prototype.parseProcedure = function (access) {
+    var line = this.line();
+    this.eatKw('PROCEDURE');
+    var name = this.parseDefName();
+    var params = this.is('(') ? this.parseParams() : [];
+    var body = this.parseBlock(['ENDPROCEDURE']);
+    this.eatKw('ENDPROCEDURE');
+    this.endStmt();
+    return { type: 'ProcDef', name: name, params: params, body: body, access: access || 'PUBLIC', line: line };
+  };
+
+  Parser.prototype.parseFunction = function (access) {
+    var line = this.line();
+    this.eatKw('FUNCTION');
+    var name = this.parseDefName();
+    var params = this.is('(') ? this.parseParams() : [];
+    this.eatKw('RETURNS');
+    var ret = this.parseTypeSpec();
+    var body = this.parseBlock(['ENDFUNCTION']);
+    this.eatKw('ENDFUNCTION');
+    this.endStmt();
+    return { type: 'FuncDef', name: name, params: params, returns: ret, body: body, access: access || 'PUBLIC', line: line };
+  };
+
+  Parser.prototype.parseCall = function () {
+    var line = this.line();
+    this.eatKw('CALL');
+    var name = this.eat('IDENT').value;
+    var args = [];
+    if (this.is('(')) { this.next(); args = this.parseArgs(); this.eat(')'); }
+    this.endStmt();
+    return { type: 'CallStmt', name: name, args: args, line: line };
+  };
+
+  Parser.prototype.parseReturn = function () {
+    var line = this.line();
+    this.eatKw('RETURN');
+    var val = null;
+    if (!this.is('NL') && !this.is('EOF')) val = this.parseExpr();
+    this.endStmt();
+    return { type: 'Return', value: val, line: line };
+  };
+
+  Parser.prototype.parseInput = function () {
+    var line = this.line();
+    this.eatKw('INPUT');
+    // optional prompt string then comma (some styles); CIE just INPUT var
+    var target = this.parsePostfix();
+    this.endStmt();
+    return { type: 'Input', target: target, line: line };
+  };
+
+  Parser.prototype.parseOutput = function () {
+    var line = this.line();
+    this.next(); // OUTPUT or PRINT
+    var args = [];
+    if (!this.is('NL') && !this.is('EOF')) {
+      args.push(this.parseExpr());
+      while (this.is(',')) { this.next(); args.push(this.parseExpr()); }
+    }
+    this.endStmt();
+    return { type: 'Output', args: args, line: line };
+  };
+
+  Parser.prototype.parseType = function () {
+    var line = this.line();
+    this.eatKw('TYPE');
+    var name = this.eat('IDENT').value;
+    if (this.is('=')) {
+      this.next();
+      if (this.is('^')) {           // pointer
+        this.next();
+        var base = this.parseTypeSpec();
+        this.endStmt();
+        return { type: 'TypeDef', kind: 'pointer', name: name, of: base, line: line };
+      }
+      if (this.isKw('SET')) {       // set
+        this.next(); this.eatKw('OF');
+        var et = this.parseTypeSpec();
+        this.endStmt();
+        return { type: 'TypeDef', kind: 'set', name: name, of: et, line: line };
+      }
+      if (this.is('(')) {           // enumerated
+        this.next();
+        var members = [this.eat('IDENT').value];
+        while (this.is(',')) { this.next(); members.push(this.eat('IDENT').value); }
+        this.eat(')');
+        this.endStmt();
+        return { type: 'TypeDef', kind: 'enum', name: name, members: members, line: line };
+      }
+      err('Unsupported TYPE definition', line);
+    }
+    // record
+    this.skipNL();
+    var fields = [];
+    while (!this.atEnd() && !this.isKw('ENDTYPE')) {
+      this.skipNL();
+      if (this.isKw('ENDTYPE')) break;
+      this.eatKw('DECLARE');
+      var fnames = [this.eat('IDENT').value];
+      while (this.is(',')) { this.next(); fnames.push(this.eat('IDENT').value); }
+      this.eat(':');
+      var ft = this.parseTypeSpec();
+      for (var k = 0; k < fnames.length; k++) fields.push({ name: fnames[k], typeSpec: ft });
+      this.skipNL();
+    }
+    this.eatKw('ENDTYPE');
+    this.endStmt();
+    return { type: 'TypeDef', kind: 'record', name: name, fields: fields, line: line };
+  };
+
+  Parser.prototype.parseDefine = function () {
+    var line = this.line();
+    this.eatKw('DEFINE');
+    var name = this.eat('IDENT').value;
+    this.eat('(');
+    var values = [];
+    if (!this.is(')')) {
+      values.push(this.parseExpr());
+      while (this.is(',')) { this.next(); values.push(this.parseExpr()); }
+    }
+    this.eat(')');
+    this.eat(':');
+    var setType = this.eat('IDENT').value;
+    this.endStmt();
+    return { type: 'Define', name: name, values: values, setType: setType, line: line };
+  };
+
+  Parser.prototype.parseClass = function () {
+    var line = this.line();
+    this.eatKw('CLASS');
+    var name = this.eat('IDENT').value;
+    var parent = null;
+    if (this.isKw('INHERITS')) { this.next(); parent = this.eat('IDENT').value; }
+    this.skipNL();
+    var fields = [], methods = [];
+    while (!this.atEnd() && !this.isKw('ENDCLASS')) {
+      this.skipNL();
+      if (this.isKw('ENDCLASS')) break;
+      var access = 'PUBLIC';
+      if (this.isKw('PUBLIC') || this.isKw('PRIVATE')) access = this.next().value;
+      if (this.isKw('PROCEDURE')) { methods.push(this.parseProcedure(access)); }
+      else if (this.isKw('FUNCTION')) { methods.push(this.parseFunction(access)); }
+      else if (this.isKw('DECLARE')) { fields.push(this.parseDeclare(access)); }
+      else if (this.is('IDENT')) {
+        // field declared without DECLARE keyword:  PRIVATE Name : STRING
+        var fname = this.next().value;
+        this.eat(':');
+        var ftype = this.parseTypeSpec();
+        this.endStmt();
+        fields.push({ type: 'Declare', names: [fname], typeSpec: ftype, access: access });
+      } else err('Unexpected token in CLASS body: ' + this.describe(this.peek()), this.line());
+      this.skipNL();
+    }
+    this.eatKw('ENDCLASS');
+    this.endStmt();
+    return { type: 'ClassDef', name: name, parent: parent, fields: fields, methods: methods, line: line };
+  };
+
+  Parser.prototype.parseOpenFile = function () {
+    var line = this.line(); this.eatKw('OPENFILE');
+    var file = this.parseExpr();
+    this.eatKw('FOR');
+    var modeTok = this.peek();
+    var mode = (modeTok.type === 'KW' || modeTok.type === 'IDENT') ? modeTok.value.toUpperCase() : null;
+    if (['READ','WRITE','APPEND','RANDOM'].indexOf(mode) === -1) err('Invalid file mode', line);
+    this.next();
+    this.endStmt();
+    return { type: 'OpenFile', file: file, mode: mode, line: line };
+  };
+  Parser.prototype.parseReadFile = function () {
+    var line = this.line(); this.eatKw('READFILE');
+    var file = this.parseExpr(); this.eat(',');
+    var target = this.parsePostfix();
+    this.endStmt();
+    return { type: 'ReadFile', file: file, target: target, line: line };
+  };
+  Parser.prototype.parseWriteFile = function () {
+    var line = this.line(); this.eatKw('WRITEFILE');
+    var file = this.parseExpr(); this.eat(',');
+    var value = this.parseExpr();
+    this.endStmt();
+    return { type: 'WriteFile', file: file, value: value, line: line };
+  };
+  Parser.prototype.parseCloseFile = function () {
+    var line = this.line(); this.eatKw('CLOSEFILE');
+    var file = this.parseExpr();
+    this.endStmt();
+    return { type: 'CloseFile', file: file, line: line };
+  };
+  Parser.prototype.parseSeek = function () {
+    var line = this.line(); this.eatKw('SEEK');
+    var file = this.parseExpr(); this.eat(',');
+    var addr = this.parseExpr();
+    this.endStmt();
+    return { type: 'Seek', file: file, addr: addr, line: line };
+  };
+  Parser.prototype.parseGetRecord = function () {
+    var line = this.line(); this.eatKw('GETRECORD');
+    var file = this.parseExpr(); this.eat(',');
+    var target = this.parsePostfix();
+    this.endStmt();
+    return { type: 'GetRecord', file: file, target: target, line: line };
+  };
+  Parser.prototype.parsePutRecord = function () {
+    var line = this.line(); this.eatKw('PUTRECORD');
+    var file = this.parseExpr(); this.eat(',');
+    var value = this.parseExpr();
+    this.endStmt();
+    return { type: 'PutRecord', file: file, value: value, line: line };
+  };
+
+  Parser.prototype.parseAssignmentOrExpr = function () {
+    var line = this.line();
+    var lhs = this.parseExpr();
+    if (this.is('ASSIGN')) {
+      this.next();
+      var rhs = this.parseExpr();
+      this.endStmt();
+      if (['Var', 'Index', 'Field', 'Deref'].indexOf(lhs.type) === -1)
+        err('Invalid assignment target', line);
+      return { type: 'Assign', target: lhs, value: rhs, line: line };
+    }
+    this.endStmt();
+    if (lhs.type === 'Call' || lhs.type === 'MethodCall' || lhs.type === 'SuperCall') {
+      return { type: 'ExprStmt', expr: lhs, line: line };
+    }
+    err("Expected a statement (did you mean to use '<-' to assign?)", line);
+  };
+
+  Parser.prototype.parseArgs = function () {
+    var args = [];
+    if (!this.is(')')) {
+      args.push(this.parseExpr());
+      while (this.is(',')) { this.next(); args.push(this.parseExpr()); }
+    }
+    return args;
+  };
+
+  /* ---- expression precedence ---- */
+  Parser.prototype.parseExpr = function () { return this.parseOr(); };
+  Parser.prototype.parseOr = function () {
+    var left = this.parseAnd();
+    while (this.isKw('OR')) { var line = this.line(); this.next(); left = { type: 'BinOp', op: 'OR', left: left, right: this.parseAnd(), line: line }; }
+    return left;
+  };
+  Parser.prototype.parseAnd = function () {
+    var left = this.parseRel();
+    while (this.isKw('AND')) { var line = this.line(); this.next(); left = { type: 'BinOp', op: 'AND', left: left, right: this.parseRel(), line: line }; }
+    return left;
+  };
+  Parser.prototype.parseRel = function () {
+    var left = this.parseConcat();
+    var rel = ['=', '<>', '<', '<=', '>', '>='];
+    while (rel.indexOf(this.peek().type) !== -1) {
+      var op = this.next().type; var line = this.line();
+      left = { type: 'BinOp', op: op, left: left, right: this.parseConcat(), line: line };
+    }
+    return left;
+  };
+  Parser.prototype.parseConcat = function () {
+    var left = this.parseAdd();
+    while (this.is('&')) { var line = this.line(); this.next(); left = { type: 'BinOp', op: '&', left: left, right: this.parseAdd(), line: line }; }
+    return left;
+  };
+  Parser.prototype.parseAdd = function () {
+    var left = this.parseMul();
+    while (this.is('+') || this.is('-')) { var op = this.next().type; var line = this.line(); left = { type: 'BinOp', op: op, left: left, right: this.parseMul(), line: line }; }
+    return left;
+  };
+  Parser.prototype.parseMul = function () {
+    var left = this.parseUnary();
+    while (this.is('*') || this.is('/') || this.isKw('DIV') || this.isKw('MOD')) {
+      var t = this.next(); var op = t.type === 'KW' ? t.value : t.type; var line = this.line();
+      left = { type: 'BinOp', op: op, left: left, right: this.parseUnary(), line: line };
+    }
+    return left;
+  };
+  Parser.prototype.parseUnary = function () {
+    var line = this.line();
+    if (this.is('-') || this.is('+')) { var op = this.next().type; return { type: 'Unary', op: op, operand: this.parseUnary(), line: line }; }
+    if (this.isKw('NOT')) { this.next(); return { type: 'Unary', op: 'NOT', operand: this.parseUnary(), line: line }; }
+    if (this.is('^')) { this.next(); return { type: 'AddrOf', operand: this.parseUnary(), line: line }; }
+    return this.parsePostfix();
+  };
+  Parser.prototype.parsePostfix = function () {
+    var node = this.parsePrimary();
+    while (true) {
+      if (this.is('[')) {
+        var line = this.line(); this.next();
+        var idx = [this.parseExpr()];
+        while (this.is(',')) { this.next(); idx.push(this.parseExpr()); }
+        this.eat(']');
+        node = { type: 'Index', target: node, indices: idx, line: line };
+      } else if (this.is('(')) {
+        var l2 = this.line(); this.next();
+        var args = this.parseArgs();
+        this.eat(')');
+        if (node.type === 'Field') node = { type: 'MethodCall', object: node.target, method: node.name, args: args, line: l2 };
+        else if (node.type === 'Var') node = { type: 'Call', name: node.name, args: args, line: l2 };
+        else err('Cannot call this expression', l2);
+      } else if (this.is('.')) {
+        var l3 = this.line(); this.next();
+        var fld = this.peek().type === 'KW' ? this.next().value : this.eat('IDENT').value;
+        node = { type: 'Field', target: node, name: fld, line: l3 };
+      } else if (this.is('^')) {
+        var l4 = this.line(); this.next();
+        node = { type: 'Deref', target: node, line: l4 };
+      } else break;
+    }
+    return node;
+  };
+  Parser.prototype.parsePrimary = function () {
+    var t = this.peek();
+    var line = t.line;
+    switch (t.type) {
+      case 'INT': this.next(); return { type: 'Lit', valueType: 'INTEGER', value: t.value, line: line };
+      case 'REAL': this.next(); return { type: 'Lit', valueType: 'REAL', value: t.value, line: line };
+      case 'STR': this.next(); return { type: 'Lit', valueType: 'STRING', value: t.value, line: line };
+      case 'CHAR': this.next(); return { type: 'Lit', valueType: 'CHAR', value: t.value, line: line };
+      case 'BOOL': this.next(); return { type: 'Lit', valueType: 'BOOLEAN', value: t.value, line: line };
+      case 'IDENT': this.next(); return { type: 'Var', name: t.value, line: line };
+      case '(': { this.next(); var e = this.parseExpr(); this.eat(')'); return e; }
+      case '[': {
+        this.next();
+        var items = [];
+        if (!this.is(']')) { items.push(this.parseExpr()); while (this.is(',')) { this.next(); items.push(this.parseExpr()); } }
+        this.eat(']');
+        return { type: 'ArrayLit', items: items, line: line };
+      }
+      case 'KW':
+        if (t.value === 'NEW') {
+          this.next();
+          var cname = this.eat('IDENT').value;
+          var args = [];
+          if (this.is('(')) { this.next(); args = this.parseArgs(); this.eat(')'); }
+          return { type: 'New', className: cname, args: args, line: line };
+        }
+        if (t.value === 'SUPER') {
+          this.next(); this.eat('.');
+          var m = this.peek().type === 'KW' ? this.next().value : this.eat('IDENT').value;
+          var sargs = [];
+          if (this.is('(')) { this.next(); sargs = this.parseArgs(); this.eat(')'); }
+          return { type: 'SuperCall', method: m, args: sargs, line: line };
+        }
+        break;
+    }
+    err("Unexpected '" + this.describe(t) + "' in expression", line);
+  };
+
+  /* ------------------------------------------------------------------ *
+   * Runtime values
+   * ------------------------------------------------------------------ */
+  function V(type, value) { return { type: type, value: value }; }
+  function mkInt(n) { return V('INTEGER', Math.trunc(n)); }
+  function mkReal(n) { return V('REAL', n); }
+  function mkBool(b) { return V('BOOLEAN', !!b); }
+  function mkChar(c) { return V('CHAR', c == null ? '' : String(c).charAt(0)); }
+  function mkStr(s) { return V('STRING', s == null ? '' : String(s)); }
+
+  function isNum(v) { return v.type === 'INTEGER' || v.type === 'REAL'; }
+
+  function deepCopy(v) {
+    if (v == null) return v;
+    if (v.type === 'ARRAY') {
+      var data = {};
+      for (var k in v.value.data) if (v.value.data.hasOwnProperty(k)) data[k] = deepCopy(v.value.data[k]);
+      return { type: 'ARRAY', value: { dims: v.value.dims, of: v.value.of, data: data } };
+    }
+    if (v.type === 'RECORD') {
+      var f = {};
+      for (var fn in v.value.fields) if (v.value.fields.hasOwnProperty(fn)) f[fn] = deepCopy(v.value.fields[fn]);
+      return { type: 'RECORD', value: { typeName: v.value.typeName, fields: f } };
+    }
+    return { type: v.type, value: v.value };
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Scope
+   * ------------------------------------------------------------------ */
+  function Scope(parent) { this.vars = {}; this.parent = parent || null; }
+  Scope.prototype.findCell = function (name) {
+    var key = name.toLowerCase();
+    var s = this;
+    while (s) { if (s.vars.hasOwnProperty(key)) return s.vars[key]; s = s.parent; }
+    return null;
+  };
+  Scope.prototype.declare = function (name, cell) { this.vars[name.toLowerCase()] = cell; };
+
+  /* ------------------------------------------------------------------ *
+   * Interpreter
+   * ------------------------------------------------------------------ */
+  function Interpreter(opts) {
+    opts = opts || {};
+    this.output = opts.output || function () {};
+    this.inputFn = opts.input || function () { return null; };
+    this.maxSteps = opts.maxSteps || 3000000;
+    this.steps = 0;
+    this.global = new Scope(null);
+    this.types = {};     // user types: record/enum/pointer/set
+    this.classes = {};   // class defs
+    this.procs = {};     // procedures
+    this.funcs = {};     // functions
+    this.files = {};     // virtual file system
+    this.seedFiles = opts.files || {};
+    this.callDepth = 0;
+    this.maxDepth = opts.maxDepth || 2500;
+  }
+
+  Interpreter.prototype.tick = function (line) {
+    if (++this.steps > this.maxSteps)
+      err('Execution stopped: too many steps (possible infinite loop)', line);
+  };
+
+  Interpreter.prototype.run = function (ast) {
+    var body = ast.body;
+    // hoist definitions
+    for (var i = 0; i < body.length; i++) {
+      var s = body[i];
+      if (s.type === 'ProcDef') this.procs[s.name.toLowerCase()] = s;
+      else if (s.type === 'FuncDef') this.funcs[s.name.toLowerCase()] = s;
+      else if (s.type === 'TypeDef') this.registerType(s);
+      else if (s.type === 'ClassDef') this.classes[s.name.toLowerCase()] = s;
+    }
+    // execute the rest in order
+    for (var j = 0; j < body.length; j++) {
+      var st = body[j];
+      if (st.type === 'ProcDef' || st.type === 'FuncDef' || st.type === 'ClassDef') continue;
+      if (st.type === 'TypeDef') continue;
+      this.exec(st, this.global);
+    }
+  };
+
+  Interpreter.prototype.registerType = function (s) {
+    this.types[s.name.toLowerCase()] = s;
+    if (s.kind === 'enum') {
+      for (var i = 0; i < s.members.length; i++) {
+        var m = s.members[i];
+        this.global.declare(m, { value: { type: 'ENUM', value: { enumName: s.name, name: m, index: i } }, isConst: true, declType: { kind: 'named', name: s.name } });
+      }
+    }
+  };
+
+  /* ---- statement execution ---- */
+  Interpreter.prototype.execBlock = function (stmts, scope) {
+    for (var i = 0; i < stmts.length; i++) this.exec(stmts[i], scope);
+  };
+
+  Interpreter.prototype.exec = function (node, scope) {
+    this.tick(node.line);
+    switch (node.type) {
+      case 'Declare': return this.execDeclare(node, scope);
+      case 'Constant': {
+        var val = this.eval(node.expr, scope);
+        scope.declare(node.name, { value: val, isConst: true, declType: { kind: 'primitive', name: val.type } });
+        return;
+      }
+      case 'Assign': return this.execAssign(node, scope);
+      case 'Output': {
+        var out = '';
+        for (var i = 0; i < node.args.length; i++) out += this.toDisplay(this.eval(node.args[i], scope));
+        this.output(out);
+        return;
+      }
+      case 'Input': return this.execInput(node, scope);
+      case 'If': {
+        if (this.asBool(this.eval(node.cond, scope), node.line)) this.execBlock(node.then, scope);
+        else if (node.else) this.execBlock(node.else, scope);
+        return;
+      }
+      case 'Case': return this.execCase(node, scope);
+      case 'For': return this.execFor(node, scope);
+      case 'While': {
+        while (this.asBool(this.eval(node.cond, scope), node.line)) { this.tick(node.line); this.execBlock(node.body, scope); }
+        return;
+      }
+      case 'Repeat': {
+        do { this.tick(node.line); this.execBlock(node.body, scope); } while (!this.asBool(this.eval(node.cond, scope), node.line));
+        return;
+      }
+      case 'CallStmt': return this.execCall(node, scope);
+      case 'ExprStmt': this.eval(node.expr, scope); return;
+      case 'Return': {
+        var rv = node.value ? this.eval(node.value, scope) : null;
+        throw { __return: true, value: rv };
+      }
+      case 'Define': return this.execDefine(node, scope);
+      case 'OpenFile': return this.execOpenFile(node, scope);
+      case 'ReadFile': return this.execReadFile(node, scope);
+      case 'WriteFile': return this.execWriteFile(node, scope);
+      case 'CloseFile': return this.execCloseFile(node, scope);
+      case 'Seek': return this.execSeek(node, scope);
+      case 'GetRecord': return this.execGetRecord(node, scope);
+      case 'PutRecord': return this.execPutRecord(node, scope);
+      case 'ProcDef': this.procs[node.name.toLowerCase()] = node; return;
+      case 'FuncDef': this.funcs[node.name.toLowerCase()] = node; return;
+      case 'TypeDef': this.registerType(node); return;
+      case 'ClassDef': this.classes[node.name.toLowerCase()] = node; return;
+      default: err('Cannot execute statement of type ' + node.type, node.line);
+    }
+  };
+
+  Interpreter.prototype.execDeclare = function (node, scope) {
+    for (var i = 0; i < node.names.length; i++) {
+      var def = this.defaultValue(node.typeSpec, scope, node.line);
+      scope.declare(node.names[i], { value: def, isConst: false, declType: node.typeSpec });
+    }
+  };
+
+  Interpreter.prototype.defaultValue = function (typeSpec, scope, line) {
+    if (typeSpec.kind === 'primitive') {
+      switch (typeSpec.name) {
+        case 'INTEGER': return mkInt(0);
+        case 'REAL': return mkReal(0);
+        case 'BOOLEAN': return mkBool(false);
+        case 'CHAR': return mkChar('');
+        case 'STRING': return mkStr('');
+        case 'DATE': return V('DATE', null);
+      }
+    }
+    if (typeSpec.kind === 'array') {
+      var dims = [];
+      for (var d = 0; d < typeSpec.dims.length; d++) {
+        var lo = this.toInt(this.eval(typeSpec.dims[d].low, scope), line);
+        var hi = this.toInt(this.eval(typeSpec.dims[d].high, scope), line);
+        dims.push({ low: lo, high: hi });
+      }
+      var data = {};
+      var self = this;
+      function fill(prefix, dimIndex) {
+        if (dimIndex === dims.length) { data[prefix.join(',')] = self.defaultValue(typeSpec.of, scope, line); return; }
+        for (var x = dims[dimIndex].low; x <= dims[dimIndex].high; x++) fill(prefix.concat(x), dimIndex + 1);
+      }
+      fill([], 0);
+      return { type: 'ARRAY', value: { dims: dims, of: typeSpec.of, data: data } };
+    }
+    if (typeSpec.kind === 'named') {
+      var td = this.types[typeSpec.name.toLowerCase()];
+      if (td) {
+        if (td.kind === 'record') {
+          var fields = {};
+          for (var f = 0; f < td.fields.length; f++) fields[td.fields[f].name.toLowerCase()] = this.defaultValue(td.fields[f].typeSpec, scope, line);
+          return { type: 'RECORD', value: { typeName: td.name, fields: fields, schema: td.fields } };
+        }
+        if (td.kind === 'enum') return { type: 'ENUM', value: null };
+        if (td.kind === 'pointer') return { type: 'POINTER', value: null };
+        if (td.kind === 'set') return { type: 'SET', value: { elemType: td.of, items: [] } };
+      }
+      if (this.classes[typeSpec.name.toLowerCase()]) return { type: 'OBJECT', value: null };
+      err('Unknown type: ' + typeSpec.name, line);
+    }
+    return mkInt(0);
+  };
+
+  Interpreter.prototype.execAssign = function (node, scope) {
+    var val = this.eval(node.value, scope);
+    var ref = this.resolveRef(node.target, scope, true);
+    ref.set(this.coerceTo(val, ref.declType, node.line));
+  };
+
+  // returns {get, set, declType}
+  Interpreter.prototype.resolveRef = function (node, scope, createIfMissing) {
+    var self = this;
+    if (node.type === 'Var') {
+      var cell = scope.findCell(node.name);
+      if (!cell) {
+        // inside a method, a bare name may refer to an object field
+        var to = scope.thisObj;
+        if (to && to.value.fields.hasOwnProperty(node.name.toLowerCase())) {
+          var fkey = node.name.toLowerCase();
+          return {
+            get: function () { return to.value.fields[fkey]; },
+            set: function (v) { to.value.fields[fkey] = v; },
+            declType: null
+          };
+        }
+        if (createIfMissing) {
+          cell = { value: mkInt(0), isConst: false, declType: null };
+          // auto-declare in the *current* scope
+          scope.declare(node.name, cell);
+        } else err("Variable '" + node.name + "' is not declared", node.line);
+      }
+      if (cell.isConst && createIfMissing) err("Cannot assign to constant '" + node.name + "'", node.line);
+      return {
+        get: function () { return cell.value; },
+        set: function (v) { cell.value = v; },
+        get declType() { return cell.declType; }
+      };
+    }
+    if (node.type === 'Index') {
+      var arrRef = this.resolveRef(node.target, scope, false);
+      var arr = arrRef.get();
+      if (!arr || arr.type !== 'ARRAY') err('Cannot index a non-array value', node.line);
+      var idx = [];
+      for (var i = 0; i < node.indices.length; i++) idx.push(this.toInt(this.eval(node.indices[i], scope), node.line));
+      this.checkBounds(arr, idx, node.line);
+      var key = idx.join(',');
+      return {
+        get: function () { return arr.value.data[key]; },
+        set: function (v) { arr.value.data[key] = v; },
+        declType: arr.value.of
+      };
+    }
+    if (node.type === 'Field') {
+      var objRef = this.resolveRef(node.target, scope, false);
+      var obj = objRef.get();
+      if (obj && obj.type === 'RECORD') {
+        var fk = node.name.toLowerCase();
+        if (!obj.value.fields.hasOwnProperty(fk)) err("Record has no field '" + node.name + "'", node.line);
+        var dt = null;
+        if (obj.value.schema) for (var s = 0; s < obj.value.schema.length; s++) if (obj.value.schema[s].name.toLowerCase() === fk) dt = obj.value.schema[s].typeSpec;
+        return {
+          get: function () { return obj.value.fields[fk]; },
+          set: function (v) { obj.value.fields[fk] = v; },
+          declType: dt
+        };
+      }
+      if (obj && obj.type === 'OBJECT') {
+        var ok = node.name.toLowerCase();
+        return {
+          get: function () { return obj.value.fields[ok]; },
+          set: function (v) { obj.value.fields[ok] = v; },
+          declType: null
+        };
+      }
+      err('Cannot access field of this value', node.line);
+    }
+    if (node.type === 'Deref') {
+      var pRef = this.resolveRef(node.target, scope, false);
+      var ptr = pRef.get();
+      if (!ptr || ptr.type !== 'POINTER' || !ptr.value) err('Cannot dereference null pointer', node.line);
+      var target = ptr.value; // {get,set}
+      return { get: target.get, set: target.set, declType: null };
+    }
+    err('Invalid reference', node.line);
+  };
+
+  Interpreter.prototype.checkBounds = function (arr, idx, line) {
+    var dims = arr.value.dims;
+    if (idx.length !== dims.length) err('Array expects ' + dims.length + ' index value(s) but got ' + idx.length, line);
+    for (var i = 0; i < dims.length; i++) {
+      if (idx[i] < dims[i].low || idx[i] > dims[i].high)
+        err('Array index ' + idx[i] + ' out of range [' + dims[i].low + ':' + dims[i].high + ']', line);
+    }
+  };
+
+  Interpreter.prototype.coerceTo = function (val, declType, line) {
+    if (!declType) return val;
+    if (declType.kind === 'primitive') {
+      var t = declType.name;
+      if (t === 'REAL' && val.type === 'INTEGER') return mkReal(val.value);
+      if (t === 'INTEGER' && val.type === 'REAL') {
+        if (Number.isInteger(val.value)) return mkInt(val.value);
+        err('Type error: cannot store REAL value ' + val.value + ' in an INTEGER', line);
+      }
+      if (t === 'STRING' && val.type === 'CHAR') return mkStr(val.value);
+      if (t === 'CHAR' && val.type === 'STRING') {
+        if (val.value.length <= 1) return mkChar(val.value);
+        err('Type error: cannot store a multi-character STRING in a CHAR', line);
+      }
+      if (t === 'INTEGER' && val.type !== 'INTEGER') {
+        if (val.type === 'STRING' && /^-?\d+$/.test(val.value.trim())) return mkInt(parseInt(val.value, 10));
+        err('Type error: expected INTEGER but got ' + val.type, line);
+      }
+      if (t === 'REAL' && !isNum(val)) {
+        if (val.type === 'STRING' && val.value.trim() !== '' && !isNaN(Number(val.value))) return mkReal(Number(val.value));
+        err('Type error: expected REAL but got ' + val.type, line);
+      }
+      if (t === 'BOOLEAN' && val.type !== 'BOOLEAN') err('Type error: expected BOOLEAN but got ' + val.type, line);
+    }
+    return val;
+  };
+
+  Interpreter.prototype.execInput = function (node, scope) {
+    var ref = this.resolveRef(node.target, scope, true);
+    var raw = this.inputFn();
+    if (raw == null) raw = '';
+    raw = String(raw);
+    var dt = ref.declType;
+    var v;
+    if (dt && dt.kind === 'primitive') {
+      switch (dt.name) {
+        case 'INTEGER': {
+          var iv = parseInt(raw.trim(), 10);
+          if (isNaN(iv)) err("Invalid INTEGER input: '" + raw + "'", node.line);
+          v = mkInt(iv); break;
+        }
+        case 'REAL': {
+          var rv = parseFloat(raw.trim());
+          if (isNaN(rv)) err("Invalid REAL input: '" + raw + "'", node.line);
+          v = mkReal(rv); break;
+        }
+        case 'BOOLEAN': {
+          var b = raw.trim().toUpperCase();
+          v = mkBool(b === 'TRUE' || b === '1' || b === 'YES'); break;
+        }
+        case 'CHAR': v = mkChar(raw); break;
+        default: v = mkStr(raw);
+      }
+    } else {
+      v = mkStr(raw);
+    }
+    ref.set(v);
+  };
+
+  Interpreter.prototype.execCase = function (node, scope) {
+    var sel = this.eval(node.selector, scope);
+    for (var i = 0; i < node.clauses.length; i++) {
+      var cl = node.clauses[i];
+      var match = false;
+      if (cl.to) {
+        var lo = this.eval(cl.value, scope), hi = this.eval(cl.to, scope);
+        match = this.compare(sel, lo) >= 0 && this.compare(sel, hi) <= 0;
+      } else {
+        match = this.valueEquals(sel, this.eval(cl.value, scope));
+      }
+      if (match) { this.execBlock(cl.body, scope); return; }
+    }
+    if (node.otherwise) this.execBlock(node.otherwise, scope);
+  };
+
+  Interpreter.prototype.execFor = function (node, scope) {
+    var start = this.toInt(this.eval(node.start, scope), node.line);
+    var end = this.toInt(this.eval(node.end, scope), node.line);
+    var step = node.step ? this.toInt(this.eval(node.step, scope), node.line) : 1;
+    if (step === 0) err('FOR loop STEP cannot be 0', node.line);
+    var cell = scope.findCell(node.varName);
+    if (!cell) { cell = { value: mkInt(start), isConst: false, declType: { kind: 'primitive', name: 'INTEGER' } }; scope.declare(node.varName, cell); }
+    for (var i = start; step > 0 ? i <= end : i >= end; i += step) {
+      this.tick(node.line);
+      cell.value = mkInt(i);
+      this.execBlock(node.body, scope);
+      i = cell.value.value; // allow body to modify the counter
+    }
+  };
+
+  Interpreter.prototype.execCall = function (node, scope) {
+    var proc = this.procs[node.name.toLowerCase()];
+    if (!proc) {
+      // maybe a function used as a statement (allowed leniently)
+      if (this.funcs[node.name.toLowerCase()]) { this.callFunction(node.name, node.args, scope, node.line); return; }
+      err("Procedure '" + node.name + "' is not defined", node.line);
+    }
+    this.invoke(proc, node.args, scope, node.line, null);
+  };
+
+  // invoke a procedure or function definition; returns value for functions
+  Interpreter.prototype.invoke = function (def, argNodes, callerScope, line, thisObj) {
+    if (++this.callDepth > this.maxDepth) { this.callDepth--; err('Maximum recursion depth exceeded', line); }
+    var fnScope = new Scope(this.global);
+    if (thisObj) fnScope.thisObj = thisObj;
+    var params = def.params || [];
+    if (argNodes.length !== params.length)
+      { this.callDepth--; err("'" + def.name + "' expects " + params.length + ' argument(s) but got ' + argNodes.length, line); }
+
+    var copyBacks = [];
+    for (var i = 0; i < params.length; i++) {
+      var p = params[i];
+      if (p.mode === 'BYREF') {
+        var argRef = this.resolveRef(argNodes[i], callerScope, false);
+        var cell = { value: deepCopy(argRef.get()), isConst: false, declType: p.typeSpec };
+        fnScope.declare(p.name, cell);
+        copyBacks.push({ ref: argRef, cell: cell });
+      } else {
+        var val = deepCopy(this.eval(argNodes[i], callerScope));
+        fnScope.declare(p.name, { value: this.coerceTo(val, p.typeSpec, line), isConst: false, declType: p.typeSpec });
+      }
+    }
+    var result = null;
+    try {
+      this.execBlock(def.body, fnScope);
+    } catch (e) {
+      if (e && e.__return) result = e.value;
+      else { this.callDepth--; throw e; }
+    }
+    // copy-out for BYREF
+    for (var c = 0; c < copyBacks.length; c++) copyBacks[c].ref.set(copyBacks[c].cell.value);
+    this.callDepth--;
+    if (def.type === 'FuncDef') return result == null ? mkInt(0) : this.coerceTo(result, def.returns, line);
+    return null;
+  };
+
+  Interpreter.prototype.callFunction = function (name, argNodes, scope, line) {
+    var fn = this.funcs[name.toLowerCase()];
+    if (!fn) return null;
+    return this.invoke(fn, argNodes, scope, line, null);
+  };
+
+  /* ---- DEFINE (set) ---- */
+  Interpreter.prototype.execDefine = function (node, scope) {
+    var items = [];
+    for (var i = 0; i < node.values.length; i++) items.push(this.eval(node.values[i], scope));
+    scope.declare(node.name, { value: { type: 'SET', value: { setType: node.setType, items: items } }, isConst: true, declType: { kind: 'named', name: node.setType } });
+  };
+
+  /* ---- File handling (in-memory) ---- */
+  Interpreter.prototype.fileKey = function (node, scope) { return this.toStr(this.eval(node, scope)); };
+
+  Interpreter.prototype.execOpenFile = function (node, scope) {
+    var name = this.fileKey(node.file, scope);
+    if (this.files[name] && this.files[name].open) err("File '" + name + "' is already open", node.line);
+    var existing = this.files[name];
+    var lines = [];
+    if (node.mode === 'READ' || node.mode === 'APPEND' || node.mode === 'RANDOM') {
+      if (existing) lines = existing.lines.slice();
+      else if (this.seedFiles[name] != null) lines = String(this.seedFiles[name]).split('\n');
+    }
+    if (node.mode === 'WRITE') lines = [];
+    this.files[name] = { open: true, mode: node.mode, lines: lines, pos: 0, records: (existing && existing.records) || [] };
+  };
+  Interpreter.prototype.getOpenFile = function (name, line, mode) {
+    var f = this.files[name];
+    if (!f || !f.open) err("File '" + name + "' is not open", line);
+    if (mode && f.mode !== mode && !(mode === 'WRITE' && f.mode === 'APPEND')) {
+      // allow WRITEFILE in APPEND too
+    }
+    return f;
+  };
+  Interpreter.prototype.execReadFile = function (node, scope) {
+    var name = this.fileKey(node.file, scope);
+    var f = this.getOpenFile(name, node.line);
+    if (f.mode !== 'READ') err("File '" + name + "' is not open for READ", node.line);
+    if (f.pos >= f.lines.length) err("Attempt to read past end of file '" + name + "'", node.line);
+    var ref = this.resolveRef(node.target, scope, true);
+    ref.set(mkStr(f.lines[f.pos++]));
+  };
+  Interpreter.prototype.execWriteFile = function (node, scope) {
+    var name = this.fileKey(node.file, scope);
+    var f = this.getOpenFile(name, node.line);
+    if (f.mode !== 'WRITE' && f.mode !== 'APPEND') err("File '" + name + "' is not open for WRITE/APPEND", node.line);
+    f.lines.push(this.toStr(this.eval(node.value, scope)));
+  };
+  Interpreter.prototype.execCloseFile = function (node, scope) {
+    var name = this.fileKey(node.file, scope);
+    var f = this.files[name];
+    if (!f || !f.open) err("File '" + name + "' is not open", node.line);
+    f.open = false; f.pos = 0;
+  };
+  Interpreter.prototype.execSeek = function (node, scope) {
+    var name = this.fileKey(node.file, scope);
+    var f = this.getOpenFile(name, node.line);
+    f.pos = this.toInt(this.eval(node.addr, scope), node.line);
+  };
+  Interpreter.prototype.execGetRecord = function (node, scope) {
+    var name = this.fileKey(node.file, scope);
+    var f = this.getOpenFile(name, node.line);
+    var ref = this.resolveRef(node.target, scope, true);
+    var rec = f.records[f.pos];
+    if (rec != null) ref.set(deepCopy(rec));
+  };
+  Interpreter.prototype.execPutRecord = function (node, scope) {
+    var name = this.fileKey(node.file, scope);
+    var f = this.getOpenFile(name, node.line);
+    f.records[f.pos] = deepCopy(this.eval(node.value, scope));
+  };
+
+  /* ------------------------------------------------------------------ *
+   * Expression evaluation
+   * ------------------------------------------------------------------ */
+  Interpreter.prototype.eval = function (node, scope) {
+    switch (node.type) {
+      case 'Lit':
+        if (node.valueType === 'INTEGER') return mkInt(node.value);
+        if (node.valueType === 'REAL') return mkReal(node.value);
+        if (node.valueType === 'STRING') return mkStr(node.value);
+        if (node.valueType === 'CHAR') return mkChar(node.value);
+        if (node.valueType === 'BOOLEAN') return mkBool(node.value);
+        break;
+      case 'Var': {
+        var cell = scope.findCell(node.name);
+        if (cell) return cell.value;
+        // implicit "this" field access inside a method
+        if (scope.thisObj && scope.thisObj.value.fields.hasOwnProperty(node.name.toLowerCase()))
+          return scope.thisObj.value.fields[node.name.toLowerCase()];
+        // maybe an enum member or zero-arg call? treat as undeclared
+        err("Variable '" + node.name + "' is used before it is declared/assigned", node.line);
+        break;
+      }
+      case 'BinOp': return this.evalBinOp(node, scope);
+      case 'Unary': return this.evalUnary(node, scope);
+      case 'Index': {
+        var tval = this.eval(node.target, scope);
+        if (tval && tval.type === 'STRING') {
+          if (node.indices.length !== 1) err('A string is indexed with a single position', node.line);
+          var p = this.toInt(this.eval(node.indices[0], scope), node.line);
+          if (p < 1 || p > tval.value.length) err('String position ' + p + ' is out of range (1:' + tval.value.length + ')', node.line);
+          return mkChar(tval.value.charAt(p - 1));
+        }
+        if (tval && tval.type === 'ARRAY') {
+          var idx = [];
+          for (var ii = 0; ii < node.indices.length; ii++) idx.push(this.toInt(this.eval(node.indices[ii], scope), node.line));
+          this.checkBounds(tval, idx, node.line);
+          return tval.value.data[idx.join(',')];
+        }
+        err('Cannot index a non-array value', node.line);
+        break;
+      }
+      case 'Field': {
+        var t = this.eval(node.target, scope);
+        if (t && t.type === 'RECORD') {
+          var fk = node.name.toLowerCase();
+          if (!t.value.fields.hasOwnProperty(fk)) err("Record has no field '" + node.name + "'", node.line);
+          return t.value.fields[fk];
+        }
+        if (t && t.type === 'OBJECT') return t.value.fields[node.name.toLowerCase()];
+        err('Cannot access field of this value', node.line);
+        break;
+      }
+      case 'Call': return this.evalCall(node, scope);
+      case 'MethodCall': return this.evalMethodCall(node, scope);
+      case 'New': return this.evalNew(node, scope);
+      case 'SuperCall': return this.evalSuper(node, scope);
+      case 'ArrayLit': {
+        // represented loosely; only used when assigned to an array variable
+        var items = [];
+        for (var i = 0; i < node.items.length; i++) items.push(this.eval(node.items[i], scope));
+        return { type: 'ARRAYLIT', value: items };
+      }
+      case 'AddrOf': {
+        var r = this.resolveRef(node.operand, scope, false);
+        return { type: 'POINTER', value: { get: r.get, set: r.set } };
+      }
+      case 'Deref': {
+        var ref2 = this.resolveRef(node, scope, false);
+        return ref2.get();
+      }
+    }
+    err('Cannot evaluate expression', node.line);
+  };
+
+  Interpreter.prototype.evalUnary = function (node, scope) {
+    var v = this.eval(node.operand, scope);
+    if (node.op === 'NOT') return mkBool(!this.asBool(v, node.line));
+    if (node.op === '-') { if (!isNum(v)) err('Unary minus needs a number', node.line); return v.type === 'INTEGER' ? mkInt(-v.value) : mkReal(-v.value); }
+    if (node.op === '+') { if (!isNum(v)) err('Unary plus needs a number', node.line); return v; }
+    err('Bad unary operator', node.line);
+  };
+
+  Interpreter.prototype.evalBinOp = function (node, scope) {
+    var op = node.op;
+    if (op === 'AND') return mkBool(this.asBool(this.eval(node.left, scope), node.line) && this.asBool(this.eval(node.right, scope), node.line));
+    if (op === 'OR') return mkBool(this.asBool(this.eval(node.left, scope), node.line) || this.asBool(this.eval(node.right, scope), node.line));
+    var l = this.eval(node.left, scope), r = this.eval(node.right, scope);
+    switch (op) {
+      case '&': return mkStr(this.toStr(l) + this.toStr(r));
+      case '+': case '-': case '*': {
+        this.numCheck(l, r, op, node.line);
+        var a = l.value, b = r.value, res = op === '+' ? a + b : op === '-' ? a - b : a * b;
+        return (l.type === 'INTEGER' && r.type === 'INTEGER') ? mkInt(res) : mkReal(res);
+      }
+      case '/': {
+        this.numCheck(l, r, op, node.line);
+        if (r.value === 0) err('Division by zero', node.line);
+        return mkReal(l.value / r.value);
+      }
+      case 'DIV': {
+        this.numCheck(l, r, op, node.line);
+        if (r.value === 0) err('Division by zero (DIV)', node.line);
+        return mkInt(Math.trunc(l.value / r.value));
+      }
+      case 'MOD': {
+        this.numCheck(l, r, op, node.line);
+        if (r.value === 0) err('Division by zero (MOD)', node.line);
+        return mkInt(l.value % r.value);
+      }
+      case '=': return mkBool(this.valueEquals(l, r));
+      case '<>': return mkBool(!this.valueEquals(l, r));
+      case '<': return mkBool(this.compare(l, r) < 0);
+      case '<=': return mkBool(this.compare(l, r) <= 0);
+      case '>': return mkBool(this.compare(l, r) > 0);
+      case '>=': return mkBool(this.compare(l, r) >= 0);
+    }
+    err('Unknown operator ' + op, node.line);
+  };
+
+  Interpreter.prototype.numCheck = function (l, r, op, line) {
+    if (!isNum(l) || !isNum(r)) {
+      // lenient: numeric strings
+      if (l.type === 'STRING' && !isNaN(Number(l.value)) && l.value.trim() !== '') l.value = Number(l.value), l.type = (Number.isInteger(l.value) ? 'INTEGER' : 'REAL');
+      if (r.type === 'STRING' && !isNaN(Number(r.value)) && r.value.trim() !== '') r.value = Number(r.value), r.type = (Number.isInteger(r.value) ? 'INTEGER' : 'REAL');
+      if (!isNum(l) || !isNum(r)) err("Operator '" + op + "' needs numbers", line);
+    }
+  };
+
+  Interpreter.prototype.valueEquals = function (a, b) {
+    if (isNum(a) && isNum(b)) return a.value === b.value;
+    if (a.type === 'ENUM' && b.type === 'ENUM') return a.value && b.value && a.value.name === b.value.name;
+    if ((a.type === 'CHAR' || a.type === 'STRING') && (b.type === 'CHAR' || b.type === 'STRING')) return this.toStr(a) === this.toStr(b);
+    if (a.type === 'BOOLEAN' && b.type === 'BOOLEAN') return a.value === b.value;
+    return this.toStr(a) === this.toStr(b);
+  };
+
+  Interpreter.prototype.compare = function (a, b) {
+    if (isNum(a) && isNum(b)) return a.value < b.value ? -1 : a.value > b.value ? 1 : 0;
+    if (a.type === 'ENUM' && b.type === 'ENUM') return a.value.index - b.value.index;
+    var sa = this.toStr(a), sb = this.toStr(b);
+    return sa < sb ? -1 : sa > sb ? 1 : 0;
+  };
+
+  /* ---- calls / builtins ---- */
+  Interpreter.prototype.evalCall = function (node, scope) {
+    var lname = node.name.toLowerCase();
+    if (this.funcs[lname]) return this.invoke(this.funcs[lname], node.args, scope, node.line, null);
+    // builtins
+    var b = this.builtin(node.name, node.args, scope, node.line);
+    if (b !== undefined) return b;
+    // method self-call inside a method body
+    if (scope.thisObj) {
+      var cls = this.classes[scope.thisObj.value.className.toLowerCase()];
+      var m = this.findMethod(cls, node.name);
+      if (m) return this.invokeMethod(m.def, m.cls, node.args, scope, node.line, scope.thisObj);
+    }
+    // a procedure called like a function? not allowed to return value
+    if (this.procs[lname]) { this.invoke(this.procs[lname], node.args, scope, node.line, null); return mkInt(0); }
+    err("Function '" + node.name + "' is not defined", node.line);
+  };
+
+  Interpreter.prototype.builtin = function (name, argNodes, scope, line) {
+    var up = name.toUpperCase();
+    var self = this;
+    function arg(i) { return self.eval(argNodes[i], scope); }
+    function need(k) { if (argNodes.length !== k) err(up + ' expects ' + k + ' argument(s)', line); }
+    switch (up) {
+      case 'LENGTH': need(1); return mkInt(self.toStr(arg(0)).length);
+      case 'LEFT': need(2); return mkStr(self.toStr(arg(0)).substring(0, self.toInt(arg(1), line)));
+      case 'RIGHT': { need(2); var s = self.toStr(arg(0)); var x = self.toInt(arg(1), line); return mkStr(s.substring(s.length - x)); }
+      case 'MID': { need(3); var st = self.toStr(arg(0)); var start = self.toInt(arg(1), line); var len = self.toInt(arg(2), line); return mkStr(st.substr(start - 1, len)); }
+      case 'SUBSTRING': { need(3); var st2 = self.toStr(arg(0)); var start2 = self.toInt(arg(1), line); var len2 = self.toInt(arg(2), line); return mkStr(st2.substr(start2 - 1, len2)); }
+      case 'LCASE': { need(1); var v = arg(0); return v.type === 'CHAR' ? mkChar(self.toStr(v).toLowerCase()) : mkStr(self.toStr(v).toLowerCase()); }
+      case 'UCASE': { need(1); var v2 = arg(0); return v2.type === 'CHAR' ? mkChar(self.toStr(v2).toUpperCase()) : mkStr(self.toStr(v2).toUpperCase()); }
+      case 'TO_UPPER': { need(1); var v2b = arg(0); return v2b.type === 'CHAR' ? mkChar(self.toStr(v2b).toUpperCase()) : mkStr(self.toStr(v2b).toUpperCase()); }
+      case 'TO_LOWER': { need(1); var v2c = arg(0); return v2c.type === 'CHAR' ? mkChar(self.toStr(v2c).toLowerCase()) : mkStr(self.toStr(v2c).toLowerCase()); }
+      case 'ASC': { need(1); return mkInt(self.toStr(arg(0)).charCodeAt(0) || 0); }
+      case 'CHR': { need(1); return mkChar(String.fromCharCode(self.toInt(arg(0), line))); }
+      case 'INT': { need(1); return mkInt(Math.trunc(self.toNum(arg(0), line))); }
+      case 'INTEGER': { need(1); return mkInt(Math.trunc(self.toNum(arg(0), line))); }
+      case 'ROUND': { need(2); var num = self.toNum(arg(0), line); var dp = self.toInt(arg(1), line); var f = Math.pow(10, dp); return mkReal(Math.round(num * f) / f); }
+      case 'RAND': { need(1); return mkReal(Math.random() * self.toNum(arg(0), line)); }
+      case 'RANDOM': { if (argNodes.length === 0) return mkReal(Math.random()); return mkReal(Math.random() * self.toNum(arg(0), line)); }
+      case 'RANDOMBETWEEN': { need(2); var lo = self.toInt(arg(0), line), hi = self.toInt(arg(1), line); return mkInt(lo + Math.floor(Math.random() * (hi - lo + 1))); }
+      case 'DIV': { need(2); return mkInt(Math.trunc(self.toNum(arg(0), line) / self.toNum(arg(1), line))); }
+      case 'MOD': { need(2); return mkInt(self.toNum(arg(0), line) % self.toNum(arg(1), line)); }
+      case 'NUM_TO_STR': case 'NUM_TO_STRING': case 'INT_TO_STRING': case 'REAL_TO_STRING': { need(1); return mkStr(self.toDisplay(arg(0))); }
+      case 'STR_TO_NUM': case 'STRING_TO_NUM': case 'STRING_TO_INT': { need(1); var nn = Number(self.toStr(arg(0))); return Number.isInteger(nn) ? mkInt(nn) : mkReal(nn); }
+      case 'EOF': { need(1); var fn = self.toStr(arg(0)); var f = self.files[fn]; if (!f) err("File '" + fn + "' is not open", line); return mkBool(f.pos >= f.lines.length); }
+    }
+    return undefined;
+  };
+
+  /* ---- OOP ---- */
+  Interpreter.prototype.evalNew = function (node, scope) {
+    var cls = this.classes[node.className.toLowerCase()];
+    if (!cls) err("Class '" + node.className + "' is not defined", node.line);
+    var obj = { type: 'OBJECT', value: { className: cls.name, fields: {} } };
+    this.initClassFields(cls, obj, scope, node.line);
+    var ctor = this.findMethod(cls, 'NEW');
+    if (ctor) this.invokeMethod(ctor.def, ctor.cls, node.args, scope, node.line, obj);
+    return obj;
+  };
+  Interpreter.prototype.initClassFields = function (cls, obj, scope, line) {
+    if (cls.parent) { var p = this.classes[cls.parent.toLowerCase()]; if (p) this.initClassFields(p, obj, scope, line); }
+    for (var i = 0; i < cls.fields.length; i++) {
+      var f = cls.fields[i];
+      obj.value.fields[f.names[0].toLowerCase()] = this.defaultValue(f.typeSpec, scope, line);
+    }
+  };
+  Interpreter.prototype.findMethod = function (cls, name) {
+    var c = cls;
+    while (c) {
+      for (var i = 0; i < c.methods.length; i++) if (c.methods[i].name.toLowerCase() === name.toLowerCase()) return { def: c.methods[i], cls: c };
+      c = c.parent ? this.classes[c.parent.toLowerCase()] : null;
+    }
+    return null;
+  };
+  Interpreter.prototype.evalMethodCall = function (node, scope) {
+    var obj = this.eval(node.object, scope);
+    if (!obj || obj.type !== 'OBJECT') err('Cannot call method on a non-object', node.line);
+    var cls = this.classes[obj.value.className.toLowerCase()];
+    var m = this.findMethod(cls, node.method);
+    if (!m) err("Method '" + node.method + "' not found on class " + obj.value.className, node.line);
+    return this.invokeMethod(m.def, m.cls, node.args, scope, node.line, obj);
+  };
+  Interpreter.prototype.invokeMethod = function (def, cls, argNodes, callerScope, line, obj) {
+    if (++this.callDepth > this.maxDepth) { this.callDepth--; err('Maximum recursion depth exceeded', line); }
+    var fnScope = new Scope(this.global);
+    fnScope.thisObj = obj;
+    fnScope.currentClass = cls;
+    var params = def.params || [];
+    if (argNodes.length !== params.length) { this.callDepth--; err("Method '" + def.name + "' expects " + params.length + ' argument(s)', line); }
+    for (var i = 0; i < params.length; i++) {
+      var val = deepCopy(this.eval(argNodes[i], callerScope));
+      fnScope.declare(params[i].name, { value: this.coerceTo(val, params[i].typeSpec, line), isConst: false, declType: params[i].typeSpec });
+    }
+    // field names resolve via thisObj (handled in eval/resolveRef)
+    var result = null;
+    try { this.execBlock(def.body, fnScope); }
+    catch (e) { if (e && e.__return) result = e.value; else { this.callDepth--; throw e; } }
+    this.callDepth--;
+    if (def.type === 'FuncDef') return result == null ? mkInt(0) : result;
+    return null;
+  };
+  Interpreter.prototype.evalSuper = function (node, scope) {
+    var obj = scope.thisObj;
+    var cls = scope.currentClass;
+    if (!obj || !cls || !cls.parent) err('SUPER can only be used inside a subclass method', node.line);
+    var parent = this.classes[cls.parent.toLowerCase()];
+    var m = this.findMethod(parent, node.method);
+    if (!m) err("SUPER has no method '" + node.method + "'", node.line);
+    return this.invokeMethod(m.def, m.cls, node.args, scope, node.line, obj);
+  };
+
+  /* ---- conversions ---- */
+  Interpreter.prototype.asBool = function (v, line) {
+    if (v.type === 'BOOLEAN') return v.value;
+    err('Expected a BOOLEAN value (TRUE/FALSE)', line);
+  };
+  Interpreter.prototype.toInt = function (v, line) {
+    if (v.type === 'INTEGER') return v.value;
+    if (v.type === 'REAL') { if (Number.isInteger(v.value)) return v.value; return Math.trunc(v.value); }
+    if (v.type === 'STRING' && /^-?\d+$/.test(v.value.trim())) return parseInt(v.value, 10);
+    err('Expected an INTEGER value', line);
+  };
+  Interpreter.prototype.toNum = function (v, line) {
+    if (isNum(v)) return v.value;
+    if (v.type === 'STRING' && v.value.trim() !== '' && !isNaN(Number(v.value))) return Number(v.value);
+    err('Expected a numeric value', line);
+  };
+  Interpreter.prototype.toStr = function (v) {
+    if (v == null) return '';
+    switch (v.type) {
+      case 'STRING': case 'CHAR': return v.value;
+      case 'INTEGER': return String(v.value);
+      case 'REAL': return fmtReal(v.value);
+      case 'BOOLEAN': return v.value ? 'TRUE' : 'FALSE';
+      case 'ENUM': return v.value ? v.value.name : 'NULL';
+      case 'DATE': return v.value || '';
+      case 'POINTER': return v.value ? '<pointer>' : 'NULL';
+      case 'OBJECT': return v.value ? '<' + v.value.className + '>' : 'NULL';
+      case 'RECORD': return '<record ' + v.value.typeName + '>';
+      default: return String(v.value);
+    }
+  };
+  Interpreter.prototype.toDisplay = function (v) { return this.toStr(v); };
+
+  function fmtReal(n) {
+    if (!isFinite(n)) return String(n);
+    if (Number.isInteger(n)) return String(n);
+    var r = parseFloat(n.toFixed(10));
+    return String(r);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Public API
+   * ------------------------------------------------------------------ */
+  function run(source, options) {
+    options = options || {};
+    var outBuf = [];
+    var collect = function (s) { outBuf.push(s); };
+    var interp = new Interpreter({
+      output: options.output || collect,
+      input: options.input,
+      files: options.files,
+      maxSteps: options.maxSteps,
+      maxDepth: options.maxDepth
+    });
+    var result = { ok: true, output: '', error: null, files: null };
+    try {
+      var tokens = tokenize(source);
+      var ast = new Parser(tokens).parseProgram();
+      interp.run(ast);
+      result.files = interp.files;
+    } catch (e) {
+      result.ok = false;
+      if (e instanceof PseudoError) result.error = { message: e.message, line: e.line };
+      else if (e && e.__return) { /* top-level RETURN */ }
+      else result.error = { message: (e && e.message) || String(e), line: null };
+    }
+    if (!options.output) result.output = outBuf.join('\n') + (outBuf.length ? '\n' : '');
+    return result;
+  }
+
+  var API = { run: run, tokenize: tokenize, Parser: Parser, Interpreter: Interpreter, PseudoError: PseudoError, fmtReal: fmtReal };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  global.PseudoEngine = API;
+
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* ============================================================================
+ * PseudoLab content: Learn lessons + Practice questions.
+ * Cambridge International AS & A Level Computer Science (9618).
+ *
+ * Lesson topics follow the coursebook (Langfield & Duddell):
+ *   AS  -> Part 2: Ch 12 Algorithm design, Ch 13 Data types & structures,
+ *          Ch 14 Programming and data representation.
+ *   A2  -> Part 4: Ch 23 Algorithms, Ch 24 Recursion,
+ *          Ch 26 File processing & exception handling, Ch 27 OOP, Ch 25 paradigms.
+ *
+ * Practice questions are auto-graded by running BOTH the model solution and the
+ * learner's code on the same inputs and comparing OUTPUT.
+ * ==========================================================================*/
+(function (global) {
+  'use strict';
+
+  var lessons = [
+    /* ============================ AS LEVEL ============================ */
+    {
+      id: 'as-ct', level: 'AS', topic: 'Ch 12 · Algorithm Design',
+      title: 'Computational Thinking & Algorithms',
+      html:
+        '<p>Computational thinking is a logical approach to solving problems. It rests on four ideas you should be able to name and explain:</p>' +
+        '<ul><li><strong>Abstraction</strong> — remove detail that is not needed (a map of train lines, not streets).</li>' +
+        '<li><strong>Decomposition</strong> — break a problem into smaller sub-problems, which become modules (procedures/functions).</li>' +
+        '<li><strong>Pattern recognition</strong> — reuse standard solutions (searching, sorting, totalling).</li>' +
+        '<li><strong>Algorithmic thinking</strong> — design clear step-by-step instructions.</li></ul>' +
+        '<p>An <strong>algorithm</strong> is a sequence of defined steps that performs a task. Algorithms can be expressed as <em>structured English</em>, a <em>flowchart</em>, or <em>pseudocode</em>. This course (and the exam) uses pseudocode.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> A good algorithm is correct, finite (it ends), unambiguous, and works for every valid input — including edge cases.</div>',
+      example:
+        '// Algorithm: report the largest of three numbers\nDECLARE a : INTEGER\nDECLARE b : INTEGER\nDECLARE c : INTEGER\na <- 14\nb <- 9\nc <- 21\nIF a >= b AND a >= c THEN\n   OUTPUT "Largest is ", a\nELSE\n   IF b >= c THEN\n      OUTPUT "Largest is ", b\n   ELSE\n      OUTPUT "Largest is ", c\n   ENDIF\nENDIF'
+    },
+    {
+      id: 'as-vars', level: 'AS', topic: 'Ch 12 · Algorithm Design',
+      title: 'Variables, Constants & Data Types',
+      html:
+        '<p>A <strong>variable</strong> is a named, typed store whose value can change. A <strong>constant</strong> holds a fixed value. Always declare variables explicitly.</p>' +
+        '<p>The data types in 9618 pseudocode are:</p>' +
+        '<ul><li><code>INTEGER</code> — whole number, e.g. 5, -3</li>' +
+        '<li><code>REAL</code> — has a fractional part, written with a decimal point, e.g. 4.7, -4.0</li>' +
+        '<li><code>CHAR</code> — one character in single quotes, e.g. <code>\'A\'</code></li>' +
+        '<li><code>STRING</code> — characters in double quotes, e.g. <code>"Hello"</code></li>' +
+        '<li><code>BOOLEAN</code> — <code>TRUE</code> or <code>FALSE</code></li>' +
+        '<li><code>DATE</code> — a calendar date, dd/mm/yyyy</li></ul>' +
+        '<pre class="syntax">DECLARE &lt;identifier&gt; : &lt;data type&gt;\nCONSTANT &lt;identifier&gt; = &lt;literal value&gt;</pre>' +
+        '<div class="tip"><strong>Exam tip:</strong> Identifiers use mixed case (<code>NumberOfPlayers</code>); keywords are UPPER CASE. Only a literal may be used as a constant value — never a variable or expression.</div>',
+      example:
+        'CONSTANT VAT = 0.20\nDECLARE Price : REAL\nDECLARE GameOver : BOOLEAN\nDECLARE Grade : CHAR\nPrice <- 50\nGrade <- \'A\'\nGameOver <- FALSE\nOUTPUT "Price inc VAT: ", Price * (1 + VAT)\nOUTPUT "Grade: ", Grade, "  Over? ", GameOver'
+    },
+    {
+      id: 'as-assign', level: 'AS', topic: 'Ch 12 · Algorithm Design',
+      title: 'Assignment & Arithmetic',
+      html:
+        '<p>The assignment operator is <code>&larr;</code> (type <code>&lt;-</code> in this editor). The right-hand side is evaluated, then stored in the variable on the left.</p>' +
+        '<p>Arithmetic operators: <code>+ &nbsp; - &nbsp; * &nbsp; /</code> and the integer operators <code>DIV</code> and <code>MOD</code>.</p>' +
+        '<ul><li><code>/</code> always gives a <strong>REAL</strong> result (so <code>10 / 2</code> is 5.0).</li>' +
+        '<li><code>DIV</code> is whole-number division: <code>17 DIV 5</code> = 3.</li>' +
+        '<li><code>MOD</code> is the remainder: <code>17 MOD 5</code> = 2.</li></ul>' +
+        '<div class="tip"><strong>Exam tip:</strong> <code>* /</code> bind tighter than <code>+ -</code>. Use brackets to make complex expressions clear. To test even numbers use <code>n MOD 2 = 0</code>.</div>',
+      example:
+        'DECLARE Seconds : INTEGER\nDECLARE Mins : INTEGER\nDECLARE Secs : INTEGER\nSeconds <- 200\nMins <- Seconds DIV 60\nSecs <- Seconds MOD 60\nOUTPUT Seconds, " seconds = ", Mins, " min ", Secs, " sec"'
+    },
+    {
+      id: 'as-bool', level: 'AS', topic: 'Ch 14 · Programming',
+      title: 'Boolean Expressions & Logic',
+      html:
+        '<p>A condition is a <strong>Boolean expression</strong> — it evaluates to <code>TRUE</code> or <code>FALSE</code>.</p>' +
+        '<p>Relational operators: <code>=</code>, <code>&lt;&gt;</code> (not equal), <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>.</p>' +
+        '<p>Logic operators combine Booleans: <code>AND</code> (both), <code>OR</code> (either), <code>NOT</code> (negate).</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> Bracket each comparison when combining them: <code>(age &gt;= 13) AND (age &lt;= 19)</code>. This avoids precedence mistakes and is clearer to the examiner.</div>',
+      example:
+        'DECLARE Age : INTEGER\nDECLARE HasTicket : BOOLEAN\nAge <- 15\nHasTicket <- TRUE\nIF (Age >= 13 AND Age <= 17) AND HasTicket THEN\n   OUTPUT "Teen ticket valid"\nENDIF\nOUTPUT "Not an adult? ", NOT (Age >= 18)'
+    },
+    {
+      id: 'as-select', level: 'AS', topic: 'Ch 14 · Programming',
+      title: 'Selection: IF and CASE',
+      html:
+        '<p><code>IF</code> chooses between paths. Use <code>CASE OF</code> when one variable is tested against several discrete values.</p>' +
+        '<pre class="syntax">IF &lt;condition&gt; THEN\n   &lt;statements&gt;\nELSE\n   &lt;statements&gt;\nENDIF\n\nCASE OF &lt;variable&gt;\n   &lt;value1&gt; : &lt;statement(s)&gt;\n   &lt;value2&gt; TO &lt;value3&gt; : &lt;statement(s)&gt;\n   OTHERWISE : &lt;statement(s)&gt;\nENDCASE</pre>' +
+        '<div class="tip"><strong>Exam tip:</strong> CASE clauses are tested in order; the first match runs and the rest are skipped. A value can be a range (<code>1 TO 49</code>). Put <code>OTHERWISE</code> last.</div>',
+      example:
+        'DECLARE Mark : INTEGER\nMark <- 72\nCASE OF Mark\n   80 TO 100 : OUTPUT "A"\n   70 TO 79  : OUTPUT "B"\n   60 TO 69  : OUTPUT "C"\n   OTHERWISE : OUTPUT "Below C"\nENDCASE'
+    },
+    {
+      id: 'as-iter', level: 'AS', topic: 'Ch 12 / 14 · Iteration',
+      title: 'Iteration: FOR, WHILE, REPEAT',
+      html:
+        '<p>Three loop constructs — know exactly when each is appropriate:</p>' +
+        '<ul><li><strong>Count-controlled</strong> <code>FOR … NEXT</code> — when the number of repetitions is known. <code>STEP</code> may be negative.</li>' +
+        '<li><strong>Pre-condition</strong> <code>WHILE … ENDWHILE</code> — test <em>before</em>; may run zero times.</li>' +
+        '<li><strong>Post-condition</strong> <code>REPEAT … UNTIL</code> — test <em>after</em>; always runs at least once.</li></ul>' +
+        '<pre class="syntax">FOR i &lt;- 1 TO 10 STEP 1\n   &lt;statements&gt;\nNEXT i\n\nWHILE &lt;condition&gt;\n   &lt;statements&gt;\nENDWHILE\n\nREPEAT\n   &lt;statements&gt;\nUNTIL &lt;condition&gt;</pre>' +
+        '<div class="tip"><strong>Exam tip:</strong> Use <code>REPEAT</code> for input validation — you must ask at least once. Use a <code>WHILE</code> loop when the loop might not run at all.</div>',
+      example:
+        'DECLARE Total : INTEGER\nDECLARE i : INTEGER\nTotal <- 0\nFOR i <- 1 TO 10\n   Total <- Total + i\nNEXT i\nOUTPUT "Sum 1..10 = ", Total\n\nDECLARE n : INTEGER\nn <- 100\nWHILE n > 1\n   n <- n DIV 2\nENDWHILE\nOUTPUT "Halved down to ", n'
+    },
+    {
+      id: 'as-stdalg', level: 'AS', topic: 'Ch 12 · Standard Methods',
+      title: 'Standard Algorithms & Trace Tables',
+      html:
+        '<p>Examiners expect fluency with these reusable patterns:</p>' +
+        '<ul><li><strong>Totalling</strong> — keep a running <code>Total</code>.</li>' +
+        '<li><strong>Counting</strong> — increment a <code>Count</code> when a condition is met.</li>' +
+        '<li><strong>Maximum / minimum</strong> — assume the first value, then compare the rest.</li>' +
+        '<li><strong>Average</strong> — total &divide; count.</li>' +
+        '<li><strong>Rogue value (sentinel)</strong> — a special value that ends input, e.g. <code>-1</code>.</li></ul>' +
+        '<p>A <strong>trace table</strong> records the value of each variable after every step — the key technique for dry-running and debugging an algorithm by hand.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> The sentinel itself must <em>not</em> be processed — test for it before using the value.</div>',
+      example:
+        '// Total and count values until the rogue value -1 is reached\nDECLARE Data : ARRAY[1:6] OF INTEGER\nDECLARE Total : INTEGER\nDECLARE Count : INTEGER\nDECLARE i : INTEGER\nData[1] <- 7\nData[2] <- 3\nData[3] <- 10\nData[4] <- 5\nData[5] <- -1     // rogue value marks the end\nTotal <- 0\nCount <- 0\ni <- 1\nWHILE Data[i] <> -1\n   Total <- Total + Data[i]\n   Count <- Count + 1\n   i <- i + 1\nENDWHILE\nOUTPUT "Count = ", Count\nOUTPUT "Total = ", Total\nOUTPUT "Average = ", Total / Count'
+    },
+    {
+      id: 'as-1d', level: 'AS', topic: 'Ch 13 · Data Structures',
+      title: 'One-Dimensional Arrays',
+      html:
+        '<p>An array is a fixed-length collection of elements of the <em>same</em> type, reached by an index.</p>' +
+        '<pre class="syntax">DECLARE &lt;identifier&gt; : ARRAY[&lt;lower&gt;:&lt;upper&gt;] OF &lt;type&gt;</pre>' +
+        '<p>Cambridge arrays normally start at index <strong>1</strong>. Pair every array with a <code>FOR</code> loop to read, search, total or print all its elements.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> State the bounds explicitly. <code>ARRAY[1:30]</code> has 30 elements indexed 1 to 30.</div>',
+      example:
+        'DECLARE Scores : ARRAY[1:5] OF INTEGER\nDECLARE i : INTEGER\nDECLARE Total : INTEGER\nScores[1] <- 8\nScores[2] <- 5\nScores[3] <- 9\nScores[4] <- 4\nScores[5] <- 7\nTotal <- 0\nFOR i <- 1 TO 5\n   Total <- Total + Scores[i]\nNEXT i\nOUTPUT "Average score = ", Total / 5'
+    },
+    {
+      id: 'as-2d', level: 'AS', topic: 'Ch 13 · Data Structures',
+      title: 'Two-Dimensional Arrays',
+      html:
+        '<p>A 2-D array models a table or grid. The first index is usually the <em>row</em>, the second the <em>column</em>.</p>' +
+        '<pre class="syntax">DECLARE &lt;identifier&gt; : ARRAY[&lt;l1&gt;:&lt;u1&gt;, &lt;l2&gt;:&lt;u2&gt;] OF &lt;type&gt;</pre>' +
+        '<p>Process a 2-D array with <strong>nested</strong> <code>FOR</code> loops — the outer loop for rows, the inner for columns.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> Keep your index order consistent: <code>Grid[Row, Col]</code> everywhere.</div>',
+      example:
+        'DECLARE Grid : ARRAY[1:2, 1:3] OF INTEGER\nDECLARE r : INTEGER\nDECLARE c : INTEGER\nDECLARE v : INTEGER\nv <- 1\nFOR r <- 1 TO 2\n   FOR c <- 1 TO 3\n      Grid[r, c] <- v\n      v <- v + 1\n   NEXT c\nNEXT r\nFOR r <- 1 TO 2\n   OUTPUT Grid[r,1], " ", Grid[r,2], " ", Grid[r,3]\nNEXT r'
+    },
+    {
+      id: 'as-searchsort', level: 'AS', topic: 'Ch 13 · Searching & Sorting',
+      title: 'Linear Search & Bubble Sort',
+      html:
+        '<p>Two standard algorithms you must be able to write and trace.</p>' +
+        '<p><strong>Linear search:</strong> examine each element in turn until the target is found or the array ends. Use a BOOLEAN flag to record success.</p>' +
+        '<p><strong>Bubble sort:</strong> repeatedly compare adjacent pairs and swap them if out of order; the largest value "bubbles" to the end each pass.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> An efficient bubble sort stops early if a complete pass makes no swaps (the data is already sorted).</div>',
+      example:
+        'DECLARE A : ARRAY[1:6] OF INTEGER\nDECLARE i : INTEGER\nDECLARE j : INTEGER\nDECLARE temp : INTEGER\nA[1]<-5\nA[2]<-1\nA[3]<-4\nA[4]<-2\nA[5]<-8\nA[6]<-3\nFOR i <- 1 TO 5\n   FOR j <- 1 TO 6 - i\n      IF A[j] > A[j+1] THEN\n         temp <- A[j]\n         A[j] <- A[j+1]\n         A[j+1] <- temp\n      ENDIF\n   NEXT j\nNEXT i\nFOR i <- 1 TO 6\n   OUTPUT A[i]\nNEXT i'
+    },
+    {
+      id: 'as-records', level: 'AS', topic: 'Ch 13 · Data Structures',
+      title: 'The Record Type',
+      html:
+        '<p>A <strong>record</strong> groups related fields of (possibly) different types under one type name. Define it with <code>TYPE … ENDTYPE</code>, then declare variables of that type and use dot notation.</p>' +
+        '<pre class="syntax">TYPE &lt;TypeName&gt;\n   DECLARE &lt;field&gt; : &lt;type&gt;\n   DECLARE &lt;field&gt; : &lt;type&gt;\nENDTYPE</pre>' +
+        '<div class="tip"><strong>Exam tip:</strong> Records and arrays combine powerfully: <code>ARRAY[1:30] OF StudentRecord</code> models a whole form. Access it as <code>Form[i].Name</code>.</div>',
+      example:
+        'TYPE StudentRecord\n   DECLARE Name : STRING\n   DECLARE YearGroup : INTEGER\nENDTYPE\n\nDECLARE Form : ARRAY[1:3] OF StudentRecord\nForm[1].Name <- "Ada"\nForm[1].YearGroup <- 12\nForm[2].Name <- "Bo"\nForm[2].YearGroup <- 13\nForm[3].Name <- "Cara"\nForm[3].YearGroup <- 12\nDECLARE i : INTEGER\nFOR i <- 1 TO 3\n   OUTPUT Form[i].Name, " is in year ", Form[i].YearGroup\nNEXT i'
+    },
+    {
+      id: 'as-files', level: 'AS', topic: 'Ch 13 / 14 · Files',
+      title: 'Text Files',
+      html:
+        '<p>Text files store lines of characters read or written one line at a time. Open in a mode, do the I/O, then close.</p>' +
+        '<pre class="syntax">OPENFILE "name" FOR READ | WRITE | APPEND\nREADFILE "name", &lt;stringVariable&gt;\nWRITEFILE "name", &lt;data&gt;\nCLOSEFILE "name"</pre>' +
+        '<p><code>EOF("name")</code> returns <code>TRUE</code> when there are no more lines to read. <code>WRITE</code> starts a new file; <code>APPEND</code> adds to the end of an existing one.</p>' +
+        '<div class="tip"><strong>In this editor:</strong> files live in memory for one run. Use the <strong>Files</strong> panel to pre-load a file before reading it, or <code>WRITE</code> one earlier in the same program.</div>',
+      example:
+        'OPENFILE "names.txt" FOR WRITE\nWRITEFILE "names.txt", "Ada"\nWRITEFILE "names.txt", "Bo"\nWRITEFILE "names.txt", "Cara"\nCLOSEFILE "names.txt"\n\nDECLARE line : STRING\nDECLARE count : INTEGER\ncount <- 0\nOPENFILE "names.txt" FOR READ\nWHILE NOT EOF("names.txt")\n   READFILE "names.txt", line\n   count <- count + 1\n   OUTPUT count, ": ", line\nENDWHILE\nCLOSEFILE "names.txt"'
+    },
+    {
+      id: 'as-subs', level: 'AS', topic: 'Ch 14 · Subroutines',
+      title: 'Procedures & Functions',
+      html:
+        '<p>Subroutines support decomposition. A <strong>procedure</strong> performs a task; a <strong>function</strong> performs a task and <code>RETURN</code>s a single value used in an expression.</p>' +
+        '<pre class="syntax">PROCEDURE &lt;name&gt;(&lt;param&gt; : &lt;type&gt;)\n   &lt;statements&gt;\nENDPROCEDURE\nCALL &lt;name&gt;(&lt;args&gt;)\n\nFUNCTION &lt;name&gt;(&lt;param&gt; : &lt;type&gt;) RETURNS &lt;type&gt;\n   RETURN &lt;value&gt;\nENDFUNCTION</pre>' +
+        '<div class="tip"><strong>Exam tip:</strong> Call a procedure with <code>CALL</code>. Never use <code>CALL</code> for a function — a function call appears inside an expression. Executing <code>RETURN</code> exits the function immediately.</div>',
+      example:
+        'FUNCTION IsEven(n : INTEGER) RETURNS BOOLEAN\n   RETURN (n MOD 2 = 0)\nENDFUNCTION\n\nPROCEDURE Report(n : INTEGER)\n   IF IsEven(n) THEN\n      OUTPUT n, " is even"\n   ELSE\n      OUTPUT n, " is odd"\n   ENDIF\nENDPROCEDURE\n\nDECLARE k : INTEGER\nFOR k <- 1 TO 5\n   CALL Report(k)\nNEXT k'
+    },
+    {
+      id: 'as-params', level: 'AS', topic: 'Ch 14 · Subroutines',
+      title: 'Passing Parameters (BYVAL / BYREF)',
+      html:
+        '<p>Parameters are passed <strong>by value</strong> by default — the subroutine works on a copy, so the caller\'s variable is unchanged. Pass <strong>by reference</strong> with <code>BYREF</code> so changes inside affect the caller\'s variable.</p>' +
+        '<pre class="syntax">PROCEDURE Swap(BYREF X : INTEGER, Y : INTEGER)\n   ...\nENDPROCEDURE</pre>' +
+        '<div class="tip"><strong>Exam tip:</strong> When several parameters share a mode the keyword need not be repeated — above, both X and Y are BYREF. Parameters should <em>not</em> be passed BYREF to a function.</div>',
+      example:
+        'PROCEDURE Swap(BYREF X : INTEGER, Y : INTEGER)\n   DECLARE Temp : INTEGER\n   Temp <- X\n   X <- Y\n   Y <- Temp\nENDPROCEDURE\n\nDECLARE a : INTEGER\nDECLARE b : INTEGER\na <- 5\nb <- 9\nCALL Swap(a, b)\nOUTPUT "a = ", a, ", b = ", b'
+    },
+    {
+      id: 'as-builtins', level: 'AS', topic: 'Ch 14 · Built-in Functions',
+      title: 'Built-in Functions & String Handling',
+      html:
+        '<p>9618 provides standard library functions (always given in the exam). String functions:</p>' +
+        '<ul><li><code>LENGTH(s)</code> — number of characters</li>' +
+        '<li><code>LEFT(s,n)</code> / <code>RIGHT(s,n)</code> — n characters from the start / end</li>' +
+        '<li><code>MID(s,p,n)</code> — n characters from position p (positions count from 1)</li>' +
+        '<li><code>UCASE(x)</code> / <code>LCASE(x)</code> — change case</li>' +
+        '<li><code>ASC(ch)</code> / <code>CHR(n)</code> — character &harr; ASCII code</li>' +
+        '<li><code>s[p]</code> — the single character at position p</li></ul>' +
+        '<p>Numeric: <code>INT(x)</code> (integer part), <code>STRING_TO_NUM(s)</code>, and join strings with <code>&amp;</code>.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> String positions start at 1. <code>MID("ABCDEFGH", 2, 3)</code> returns <code>"BCD"</code>.</div>',
+      example:
+        'DECLARE s : STRING\ns <- "Cambridge"\nOUTPUT "Length: ", LENGTH(s)\nOUTPUT "First 4: ", LEFT(s, 4)\nOUTPUT "Mid(4,3): ", MID(s, 4, 3)\nOUTPUT "Upper: ", UCASE(s)\nOUTPUT "Char 1: ", s[1], " (ASCII ", ASC(s[1]), ")"'
+    },
+
+    /* ============================ A2 LEVEL ============================ */
+    {
+      id: 'a2-recursion', level: 'A2', topic: 'Ch 24 · Recursion',
+      title: 'Recursion',
+      html:
+        '<p>A subroutine is <strong>recursive</strong> if it is defined in terms of itself. Every recursive solution needs:</p>' +
+        '<ul><li>a <strong>base case</strong> — an explicit answer that stops the recursion;</li>' +
+        '<li>a <strong>general case</strong> — defined in terms of itself, and it must move <em>towards</em> the base case each time.</li></ul>' +
+        '<p>At run time the system uses a <strong>stack</strong> to store the return address and local values for each call, then unwinds them as each call returns.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> Be ready to (a) trace recursion with a diagram/trace table, and (b) state benefits (clear, compact for naturally recursive problems) and drawbacks (stack memory, risk of stack overflow if the base case is never reached).</div>',
+      example:
+        'FUNCTION Factorial(n : INTEGER) RETURNS INTEGER\n   IF n <= 1 THEN\n      RETURN 1                 // base case\n   ELSE\n      RETURN n * Factorial(n - 1)   // general case\n   ENDIF\nENDFUNCTION\n\nDECLARE k : INTEGER\nFOR k <- 1 TO 6\n   OUTPUT k, "! = ", Factorial(k)\nNEXT k'
+    },
+    {
+      id: 'a2-binsearch', level: 'A2', topic: 'Ch 23 · Algorithms',
+      title: 'Binary Search',
+      html:
+        '<p>Binary search finds a value in a <strong>sorted</strong> array far faster than linear search. Each step halves the search range, so it is O(log n).</p>' +
+        '<ol><li>Look at the middle element.</li>' +
+        '<li>If it matches, stop. If the target is smaller, search the left half; if larger, search the right half.</li>' +
+        '<li>Repeat until found or the range is empty.</li></ol>' +
+        '<div class="tip"><strong>Exam tip:</strong> Binary search <em>requires</em> sorted data. Track two pointers, <code>Low</code> and <code>High</code>; the midpoint is <code>(Low + High) DIV 2</code>.</div>',
+      example:
+        'DECLARE A : ARRAY[1:8] OF INTEGER\nDECLARE i : INTEGER\nFOR i <- 1 TO 8\n   A[i] <- i * 2          // 2,4,6,...,16 (sorted)\nNEXT i\nDECLARE Target : INTEGER\nDECLARE Low : INTEGER\nDECLARE High : INTEGER\nDECLARE Mid : INTEGER\nDECLARE Found : BOOLEAN\nTarget <- 12\nLow <- 1\nHigh <- 8\nFound <- FALSE\nWHILE Low <= High AND Found = FALSE\n   Mid <- (Low + High) DIV 2\n   IF A[Mid] = Target THEN\n      Found <- TRUE\n      OUTPUT "Found at index ", Mid\n   ELSE\n      IF A[Mid] < Target THEN\n         Low <- Mid + 1\n      ELSE\n         High <- Mid - 1\n      ENDIF\n   ENDIF\nENDWHILE\nIF NOT Found THEN OUTPUT "Not found" ENDIF'
+    },
+    {
+      id: 'a2-insertion', level: 'A2', topic: 'Ch 23 · Algorithms',
+      title: 'Insertion Sort',
+      html:
+        '<p>Insertion sort builds a sorted section at the front of the array. It takes each new element and inserts it into its correct place among the already-sorted elements by shifting larger ones to the right.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> Insertion sort is efficient on nearly-sorted data (close to O(n)); in the worst case it is O(n²), like bubble sort. Be able to compare the two.</div>',
+      example:
+        'DECLARE A : ARRAY[1:6] OF INTEGER\nDECLARE i : INTEGER\nDECLARE j : INTEGER\nDECLARE key : INTEGER\nA[1]<-5\nA[2]<-2\nA[3]<-9\nA[4]<-1\nA[5]<-6\nA[6]<-3\nFOR i <- 2 TO 6\n   key <- A[i]\n   j <- i - 1\n   WHILE j >= 1 AND A[j] > key\n      A[j+1] <- A[j]\n      j <- j - 1\n   ENDWHILE\n   A[j+1] <- key\nNEXT i\nFOR i <- 1 TO 6\n   OUTPUT A[i]\nNEXT i'
+    },
+    {
+      id: 'a2-adt', level: 'A2', topic: 'Ch 23 · Data Structures',
+      title: 'Abstract Data Types (ADTs)',
+      html:
+        '<p>An <strong>abstract data type</strong> defines a set of values and the operations on them, separately from how it is implemented. The syllabus ADTs are <strong>stack, queue, linked list, binary tree</strong> and <strong>dictionary</strong>.</p>' +
+        '<p>When a language lacks an ADT, you build it from existing structures — typically an <code>ARRAY</code> of <code>records</code>, with integer "pointers" (indexes) linking the elements.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> Know each ADT\'s behaviour: stack = LIFO, queue = FIFO, linked list = ordered chain you can insert into cheaply, tree = hierarchical, dictionary = key&rarr;value lookup.</div>',
+      example:
+        '// Using an array + a size pointer as a simple collection ADT\nDECLARE Items : ARRAY[1:10] OF STRING\nDECLARE Size : INTEGER\nSize <- 0\n// "Add" operation\nSize <- Size + 1\nItems[Size] <- "apple"\nSize <- Size + 1\nItems[Size] <- "pear"\n// "Report" operation\nDECLARE i : INTEGER\nFOR i <- 1 TO Size\n   OUTPUT i, ": ", Items[i]\nNEXT i'
+    },
+    {
+      id: 'a2-stack', level: 'A2', topic: 'Ch 23 · Data Structures',
+      title: 'Stacks (LIFO)',
+      html:
+        '<p>A <strong>stack</strong> is Last-In-First-Out. Implement it with an array and a <code>Top</code> pointer.</p>' +
+        '<ul><li><strong>Push</strong>: increment <code>Top</code>, store the value (check for <em>overflow</em> first).</li>' +
+        '<li><strong>Pop</strong>: read the value at <code>Top</code>, decrement <code>Top</code> (check for <em>underflow</em> first).</li></ul>' +
+        '<div class="tip"><strong>Exam tip:</strong> An empty stack has <code>Top = 0</code>. Always check for overflow (full) when pushing and underflow (empty) when popping.</div>',
+      example:
+        'DECLARE Stack : ARRAY[1:5] OF INTEGER\nDECLARE Top : INTEGER\nDECLARE i : INTEGER\nTop <- 0\n// push 10, 20, 30\nFOR i <- 1 TO 3\n   IF Top < 5 THEN\n      Top <- Top + 1\n      Stack[Top] <- i * 10\n      OUTPUT "Pushed ", Stack[Top]\n   ENDIF\nNEXT i\n// pop everything (LIFO order)\nWHILE Top > 0\n   OUTPUT "Popped ", Stack[Top]\n   Top <- Top - 1\nENDWHILE'
+    },
+    {
+      id: 'a2-queue', level: 'A2', topic: 'Ch 23 · Data Structures',
+      title: 'Queues (FIFO)',
+      html:
+        '<p>A <strong>queue</strong> is First-In-First-Out. Use an array with two pointers, <code>Front</code> and <code>Rear</code>, and a <code>Count</code> of items. A <strong>circular queue</strong> wraps the pointers around with <code>MOD</code> so space is reused.</p>' +
+        '<ul><li><strong>Enqueue</strong>: add at <code>Rear</code>, then advance <code>Rear</code>.</li>' +
+        '<li><strong>Dequeue</strong>: remove at <code>Front</code>, then advance <code>Front</code>.</li></ul>' +
+        '<div class="tip"><strong>Exam tip:</strong> Keep a <code>Count</code> so you can tell an empty queue (Count = 0) from a full one (Count = size) — with wrap-around the pointers alone are ambiguous.</div>',
+      example:
+        'CONSTANT MaxSize = 5\nDECLARE Q : ARRAY[1:5] OF INTEGER\nDECLARE Front : INTEGER\nDECLARE Rear : INTEGER\nDECLARE Count : INTEGER\nFront <- 1\nRear <- 0\nCount <- 0\nDECLARE i : INTEGER\n// enqueue 1,2,3\nFOR i <- 1 TO 3\n   Rear <- (Rear MOD MaxSize) + 1\n   Q[Rear] <- i\n   Count <- Count + 1\nNEXT i\n// dequeue all (FIFO)\nWHILE Count > 0\n   OUTPUT "Served ", Q[Front]\n   Front <- (Front MOD MaxSize) + 1\n   Count <- Count - 1\nENDWHILE'
+    },
+    {
+      id: 'a2-linkedlist', level: 'A2', topic: 'Ch 23 · Data Structures',
+      title: 'Linked Lists',
+      html:
+        '<p>A <strong>linked list</strong> is a chain of nodes; each node holds data and a pointer to the next node. Implement it as an <code>ARRAY OF</code> record, where the pointer is the <em>index</em> of the next node (0 means null / end).</p>' +
+        '<p>A <code>Head</code> pointer marks the start. To traverse, follow the pointers until you reach 0. Inserting only changes a couple of pointers — no shifting of data.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> Real implementations also keep a <em>free list</em> of unused nodes so you can allocate and reclaim nodes. Use 0 (or &minus;1) consistently as the null pointer.</div>',
+      example:
+        'TYPE Node\n   DECLARE Data : INTEGER\n   DECLARE Pointer : INTEGER   // index of the next node, 0 = end\nENDTYPE\n\nDECLARE List : ARRAY[1:3] OF Node\nDECLARE Head : INTEGER\n// build chain 10 -> 20 -> 30\nList[1].Data <- 10\nList[1].Pointer <- 2\nList[2].Data <- 20\nList[2].Pointer <- 3\nList[3].Data <- 30\nList[3].Pointer <- 0\nHead <- 1\n// traverse\nDECLARE Current : INTEGER\nCurrent <- Head\nWHILE Current <> 0\n   OUTPUT List[Current].Data\n   Current <- List[Current].Pointer\nENDWHILE'
+    },
+    {
+      id: 'a2-tree', level: 'A2', topic: 'Ch 23 · Data Structures',
+      title: 'Binary Trees',
+      html:
+        '<p>A <strong>binary search tree</strong> stores data so that, for every node, the left subtree holds smaller values and the right subtree holds larger values. Implement nodes as a record with <code>Data</code>, <code>Left</code> and <code>Right</code> index pointers.</p>' +
+        '<p>An <strong>in-order traversal</strong> (left, node, right) visits the values in ascending order — and is naturally recursive.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> Know the three traversals: <em>in-order</em> (sorted output), <em>pre-order</em> (node first) and <em>post-order</em> (node last).</div>',
+      example:
+        'TYPE TreeNode\n   DECLARE Data : INTEGER\n   DECLARE Left : INTEGER\n   DECLARE Right : INTEGER\nENDTYPE\nDECLARE Tree : ARRAY[1:5] OF TreeNode\n// a small BST:        50\n//                    /  \\\n//                  30    70\n//                       /\n//                     60\nTree[1].Data<-50\nTree[1].Left<-2\nTree[1].Right<-3\nTree[2].Data<-30\nTree[2].Left<-0\nTree[2].Right<-0\nTree[3].Data<-70\nTree[3].Left<-4\nTree[3].Right<-0\nTree[4].Data<-60\nTree[4].Left<-0\nTree[4].Right<-0\n\nPROCEDURE InOrder(Root : INTEGER)\n   IF Root <> 0 THEN\n      CALL InOrder(Tree[Root].Left)\n      OUTPUT Tree[Root].Data\n      CALL InOrder(Tree[Root].Right)\n   ENDIF\nENDPROCEDURE\n\nCALL InOrder(1)'
+    },
+    {
+      id: 'a2-hash', level: 'A2', topic: 'Ch 23 · Data Structures',
+      title: 'Hash Tables & Dictionaries',
+      html:
+        '<p>A <strong>hash table</strong> stores items in an array at a position computed from the key by a <strong>hash function</strong> (e.g. <code>key MOD size</code>). This gives near-instant, O(1), lookup on average.</p>' +
+        '<p>When two keys hash to the same slot — a <strong>collision</strong> — one simple fix is <em>linear probing</em>: move to the next free slot. A <strong>dictionary</strong> is the ADT that maps keys to values, often built on a hash table.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> A good hash function spreads keys evenly to minimise collisions. Be able to describe at least one collision-handling method.</div>',
+      example:
+        'CONSTANT Size = 7\nDECLARE Table : ARRAY[0:6] OF INTEGER\nDECLARE i : INTEGER\nFOR i <- 0 TO 6\n   Table[i] <- -1          // -1 means empty\nNEXT i\n\nPROCEDURE Insert(Key : INTEGER)\n   DECLARE pos : INTEGER\n   pos <- Key MOD Size\n   WHILE Table[pos] <> -1          // linear probing\n      pos <- (pos + 1) MOD Size\n   ENDWHILE\n   Table[pos] <- Key\n   OUTPUT "Key ", Key, " stored in slot ", pos\nENDPROCEDURE\n\nCALL Insert(15)\nCALL Insert(22)\nCALL Insert(8)'
+    },
+    {
+      id: 'a2-bigo', level: 'A2', topic: 'Ch 23 · Algorithms',
+      title: 'Time Complexity (Big O)',
+      html:
+        '<p><strong>Big O notation</strong> describes how an algorithm\'s running time grows as the input size <em>n</em> grows. Common orders, best to worst:</p>' +
+        '<ul><li><code>O(1)</code> — constant (array index access)</li>' +
+        '<li><code>O(log n)</code> — logarithmic (binary search)</li>' +
+        '<li><code>O(n)</code> — linear (linear search, one loop)</li>' +
+        '<li><code>O(n log n)</code> — e.g. merge sort</li>' +
+        '<li><code>O(n²)</code> — quadratic (bubble / insertion sort, nested loops)</li></ul>' +
+        '<div class="tip"><strong>Exam tip:</strong> Count the dominant operation. A single loop over n items is O(n); a loop inside a loop is usually O(n²).</div>',
+      example:
+        '// Count operations: a single loop is O(n), nested loops O(n^2)\nDECLARE n : INTEGER\nDECLARE linear : INTEGER\nDECLARE quad : INTEGER\nDECLARE i : INTEGER\nDECLARE j : INTEGER\nn <- 6\nlinear <- 0\nquad <- 0\nFOR i <- 1 TO n\n   linear <- linear + 1\n   FOR j <- 1 TO n\n      quad <- quad + 1\n   NEXT j\nNEXT i\nOUTPUT "O(n)  operations = ", linear\nOUTPUT "O(n^2) operations = ", quad'
+    },
+    {
+      id: 'a2-files', level: 'A2', topic: 'Ch 26 · File Processing',
+      title: 'Random Files & Exception Handling',
+      html:
+        '<p>A2 adds <strong>random (direct-access) files</strong> of fixed-length records, addressed by record number via a movable file pointer.</p>' +
+        '<pre class="syntax">OPENFILE "name" FOR RANDOM\nSEEK "name", &lt;recordNumber&gt;\nGETRECORD "name", &lt;variable&gt;\nPUTRECORD "name", &lt;variable&gt;</pre>' +
+        '<p><strong>Exception handling</strong> deals with run-time errors (e.g. bad input, missing file) without crashing — typically a <em>try / catch</em> structure in real languages.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> A <em>serial/sequential</em> file is read in order from the start; a <em>random</em> file can jump straight to any record — much faster for direct lookups.</div>',
+      example:
+        'TYPE Player\n   DECLARE Name : STRING\n   DECLARE Score : INTEGER\nENDTYPE\nDECLARE p : Player\nDECLARE q : Player\nOPENFILE "scores.dat" FOR RANDOM\np.Name <- "Ada"\np.Score <- 99\nSEEK "scores.dat", 3\nPUTRECORD "scores.dat", p\n// later, read it straight back\nSEEK "scores.dat", 3\nGETRECORD "scores.dat", q\nOUTPUT q.Name, " scored ", q.Score\nCLOSEFILE "scores.dat"'
+    },
+    {
+      id: 'a2-oop1', level: 'A2', topic: 'Ch 27 · OOP',
+      title: 'OOP: Classes, Objects & Encapsulation',
+      html:
+        '<p>Object-oriented programming bundles <strong>attributes</strong> (data) and <strong>methods</strong> (subroutines) into a <strong>class</strong> — a template for creating <strong>objects</strong> (instances).</p>' +
+        '<ul><li><strong>Encapsulation</strong>: attributes are <code>PRIVATE</code>; access is only through <code>PUBLIC</code> methods.</li>' +
+        '<li>A <strong>constructor</strong> is a method named <code>NEW</code> that initialises a new object.</li>' +
+        '<li><strong>Getters</strong> read an attribute; <strong>setters</strong> change it.</li></ul>' +
+        '<pre class="syntax">CLASS &lt;Name&gt;\n   PRIVATE &lt;attribute&gt; : &lt;type&gt;\n   PUBLIC PROCEDURE NEW(&lt;params&gt;)\n      ...\n   ENDPROCEDURE\n   PUBLIC FUNCTION &lt;getter&gt;() RETURNS &lt;type&gt;\n      RETURN &lt;attribute&gt;\n   ENDFUNCTION\nENDCLASS\n&lt;object&gt; &lt;- NEW &lt;Name&gt;(&lt;args&gt;)</pre>' +
+        '<div class="tip"><strong>Exam tip:</strong> Encapsulation makes objects robust — data can only be changed through controlled methods.</div>',
+      example:
+        'CLASS BankAccount\n   PRIVATE Holder : STRING\n   PRIVATE Balance : INTEGER\n   PUBLIC PROCEDURE NEW(GivenName : STRING)\n      Holder <- GivenName\n      Balance <- 0\n   ENDPROCEDURE\n   PUBLIC PROCEDURE Deposit(amount : INTEGER)\n      Balance <- Balance + amount\n   ENDPROCEDURE\n   PUBLIC FUNCTION GetBalance() RETURNS INTEGER\n      RETURN Balance\n   ENDFUNCTION\nENDCLASS\n\nDECLARE acc : BankAccount\nacc <- NEW BankAccount("Ada")\nacc.Deposit(100)\nacc.Deposit(50)\nOUTPUT "Balance = ", acc.GetBalance()'
+    },
+    {
+      id: 'a2-oop2', level: 'A2', topic: 'Ch 27 · OOP',
+      title: 'OOP: Inheritance & Polymorphism',
+      html:
+        '<p><strong>Inheritance</strong> lets a subclass reuse and extend a superclass with <code>INHERITS</code>. The subclass constructor calls the parent\'s with <code>SUPER</code>.</p>' +
+        '<p><strong>Polymorphism</strong> means a subclass can <em>override</em> an inherited method so the same call behaves differently depending on the object\'s actual class.</p>' +
+        '<div class="tip"><strong>Exam tip:</strong> Inheritance models an "is-a" relationship (a Dog <em>is an</em> Animal). Containment/aggregation models "has-a". Don\'t confuse them.</div>',
+      example:
+        'CLASS Animal\n   PRIVATE Name : STRING\n   PUBLIC PROCEDURE NEW(GivenName : STRING)\n      Name <- GivenName\n   ENDPROCEDURE\n   PUBLIC FUNCTION Speak() RETURNS STRING\n      RETURN Name & " makes a sound"\n   ENDFUNCTION\nENDCLASS\n\nCLASS Dog INHERITS Animal\n   PUBLIC PROCEDURE NEW(GivenName : STRING)\n      SUPER.NEW(GivenName)\n   ENDPROCEDURE\n   PUBLIC FUNCTION Speak() RETURNS STRING   // override\n      RETURN Name & " says Woof"\n   ENDFUNCTION\nENDCLASS\n\nDECLARE a : Animal\nDECLARE d : Dog\na <- NEW Animal("Generic")\nd <- NEW Dog("Rex")\nOUTPUT a.Speak()\nOUTPUT d.Speak()'
+    },
+    {
+      id: 'a2-paradigms', level: 'A2', topic: 'Ch 25 · Paradigms',
+      title: 'Programming Paradigms',
+      html:
+        '<p>A <strong>programming paradigm</strong> is a way of thinking about and structuring programs. The syllabus covers:</p>' +
+        '<ul><li><strong>Imperative / procedural</strong> — sequences of commands and procedures (most pseudocode here).</li>' +
+        '<li><strong>Object-oriented</strong> — data and behaviour bundled into objects (Ch 27).</li>' +
+        '<li><strong>Declarative</strong> — describe facts and rules; the system finds answers (e.g. Prolog, SQL).</li>' +
+        '<li><strong>Low-level</strong> — assembly language, close to the hardware (Ch 28).</li></ul>' +
+        '<div class="tip"><strong>Exam tip:</strong> Be able to recognise a paradigm from a code sample and justify why a paradigm suits a problem.</div>',
+      example:
+        '// The SAME task (sum 1..5) in an imperative style\nDECLARE total : INTEGER\nDECLARE i : INTEGER\ntotal <- 0\nFOR i <- 1 TO 5\n   total <- total + i\nNEXT i\nOUTPUT "Imperative result: ", total\n\n// ...and a recursive (still imperative) version of the same idea\nFUNCTION SumTo(n : INTEGER) RETURNS INTEGER\n   IF n = 0 THEN RETURN 0 ENDIF\n   RETURN n + SumTo(n - 1)\nENDFUNCTION\nOUTPUT "Recursive result:  ", SumTo(5)'
+    }
+  ];
+
+  /* -------------------------------------------------------------- *
+   * PRACTICE QUESTIONS
+   * -------------------------------------------------------------- */
+  var practice = [
+    /* -------- AS -------- */
+    {
+      id: 'q-as-sum', level: 'AS', topic: 'Iteration',
+      title: 'Total and average of ten numbers',
+      prompt: '<p>Read ten REAL numbers. Output the total as <code>Total = X</code> and the average as <code>Average = Y</code>.</p>',
+      starter: 'DECLARE i : INTEGER\nDECLARE value : REAL\nDECLARE total : REAL\ntotal <- 0\n// loop ten times, accumulate, then report\n',
+      solution: 'DECLARE i : INTEGER\nDECLARE value : REAL\nDECLARE total : REAL\ntotal <- 0\nFOR i <- 1 TO 10\n   INPUT value\n   total <- total + value\nNEXT i\nOUTPUT "Total = ", total\nOUTPUT "Average = ", total / 10',
+      tests: [{ stdin: ['1','2','3','4','5','6','7','8','9','10'] }, { stdin: ['2.5','2.5','2.5','2.5','2.5','2.5','2.5','2.5','2.5','2.5'] }],
+      hint: 'Keep a running total inside a FOR loop. The average is total / 10 (a REAL).'
+    },
+    {
+      id: 'q-as-max', level: 'AS', topic: 'Procedures & Functions',
+      title: 'Function: maximum of two',
+      prompt: '<p>Write a function <code>Max(a, b)</code> that <code>RETURNS</code> the larger of two integers. The grader will call your function with two inputs.</p>',
+      starter: 'FUNCTION Max(a : INTEGER, b : INTEGER) RETURNS INTEGER\n   // return the larger value\n\nENDFUNCTION',
+      solution: 'FUNCTION Max(a : INTEGER, b : INTEGER) RETURNS INTEGER\n   IF a > b THEN\n      RETURN a\n   ELSE\n      RETURN b\n   ENDIF\nENDFUNCTION',
+      append: '\nDECLARE x : INTEGER\nDECLARE y : INTEGER\nINPUT x\nINPUT y\nOUTPUT Max(x, y)',
+      tests: [{ stdin: ['3','8'] }, { stdin: ['20','5'] }, { stdin: ['7','7'] }],
+      hint: 'Compare a and b with IF; RETURN the larger. Do not use OUTPUT inside the function.'
+    },
+    {
+      id: 'q-as-linsearch', level: 'AS', topic: 'Searching',
+      title: 'Linear search',
+      prompt: '<p>Read <code>n</code>, then <code>n</code> names, then a target name. Using a linear search, output <code>Found at X</code> (the 1-based position) or <code>Not found</code>.</p>',
+      starter: 'DECLARE n : INTEGER\nINPUT n\nDECLARE names : ARRAY[1:100] OF STRING\nDECLARE i : INTEGER\n// read the names, read the target, search\n',
+      solution: 'DECLARE n : INTEGER\nINPUT n\nDECLARE names : ARRAY[1:100] OF STRING\nDECLARE i : INTEGER\nFOR i <- 1 TO n\n   INPUT names[i]\nNEXT i\nDECLARE target : STRING\nINPUT target\nDECLARE found : BOOLEAN\nfound <- FALSE\nFOR i <- 1 TO n\n   IF names[i] = target THEN\n      found <- TRUE\n      OUTPUT "Found at ", i\n   ENDIF\nNEXT i\nIF found = FALSE THEN\n   OUTPUT "Not found"\nENDIF',
+      tests: [{ stdin: ['3','Ali','Bo','Cara','Bo'] }, { stdin: ['3','Ali','Bo','Cara','Dev'] }, { stdin: ['1','Sam','Sam'] }],
+      hint: 'Read n names into the array, read the target, then loop with a Found flag.'
+    },
+    {
+      id: 'q-as-bubble', level: 'AS', topic: 'Sorting',
+      title: 'Bubble sort',
+      prompt: '<p>Read six integers into an array, sort them into ascending order with a bubble sort, and output them one per line.</p>',
+      starter: 'DECLARE A : ARRAY[1:6] OF INTEGER\nDECLARE i : INTEGER\nFOR i <- 1 TO 6\n   INPUT A[i]\nNEXT i\n// sort, then output\n',
+      solution: 'DECLARE A : ARRAY[1:6] OF INTEGER\nDECLARE i : INTEGER\nDECLARE j : INTEGER\nDECLARE temp : INTEGER\nFOR i <- 1 TO 6\n   INPUT A[i]\nNEXT i\nFOR i <- 1 TO 5\n   FOR j <- 1 TO 6 - i\n      IF A[j] > A[j+1] THEN\n         temp <- A[j]\n         A[j] <- A[j+1]\n         A[j+1] <- temp\n      ENDIF\n   NEXT j\nNEXT i\nFOR i <- 1 TO 6\n   OUTPUT A[i]\nNEXT i',
+      tests: [{ stdin: ['5','1','4','2','8','3'] }, { stdin: ['6','5','4','3','2','1'] }, { stdin: ['1','1','2','2','3','3'] }],
+      hint: 'Nested loops: the inner loop compares adjacent pairs A[j] and A[j+1] and swaps if out of order.'
+    },
+    {
+      id: 'q-as-vowels', level: 'AS', topic: 'String Handling',
+      title: 'Count the vowels',
+      prompt: '<p>Read a word and output how many vowels (a, e, i, o, u) it contains, as <code>Vowels = X</code>. Treat upper and lower case the same.</p>',
+      starter: 'DECLARE w : STRING\nDECLARE i : INTEGER\nINPUT w\n// examine each character and count vowels\n',
+      solution: 'DECLARE w : STRING\nDECLARE i : INTEGER\nDECLARE count : INTEGER\nDECLARE ch : CHAR\nINPUT w\ncount <- 0\nFOR i <- 1 TO LENGTH(w)\n   ch <- LCASE(w[i])\n   IF ch = "a" OR ch = "e" OR ch = "i" OR ch = "o" OR ch = "u" THEN\n      count <- count + 1\n   ENDIF\nNEXT i\nOUTPUT "Vowels = ", count',
+      tests: [{ stdin: ['Education'] }, { stdin: ['rhythm'] }, { stdin: ['AEIOU'] }],
+      hint: 'Loop position 1..LENGTH(w). Get each character with w[i], lower-case it, and test the five vowels.'
+    },
+    {
+      id: 'q-as-reverse', level: 'AS', topic: 'String Handling',
+      title: 'Reverse a string',
+      prompt: '<p>Read a string and output it reversed, using string indexing (<code>s[i]</code>).</p>',
+      starter: 'DECLARE s : STRING\nDECLARE result : STRING\nDECLARE i : INTEGER\nINPUT s\nresult <- ""\n// build the reversed string\n',
+      solution: 'DECLARE s : STRING\nDECLARE result : STRING\nDECLARE i : INTEGER\nINPUT s\nresult <- ""\nFOR i <- LENGTH(s) TO 1 STEP -1\n   result <- result & s[i]\nNEXT i\nOUTPUT result',
+      tests: [{ stdin: ['pseudocode'] }, { stdin: ['radar'] }, { stdin: ['AB'] }],
+      hint: 'Loop from LENGTH(s) down to 1 with STEP -1, concatenating each character onto result.'
+    },
+    {
+      id: 'q-as-2dsum', level: 'AS', topic: '2D Arrays',
+      title: 'Row totals of a grid',
+      prompt: '<p>Read 9 integers that fill a 3&times;3 grid (row by row). Output the total of each row as <code>Row r = total</code> (three lines).</p>',
+      starter: 'DECLARE G : ARRAY[1:3, 1:3] OF INTEGER\nDECLARE r : INTEGER\nDECLARE c : INTEGER\n// read the 9 values row by row, then total each row\n',
+      solution: 'DECLARE G : ARRAY[1:3, 1:3] OF INTEGER\nDECLARE r : INTEGER\nDECLARE c : INTEGER\nDECLARE total : INTEGER\nFOR r <- 1 TO 3\n   FOR c <- 1 TO 3\n      INPUT G[r, c]\n   NEXT c\nNEXT r\nFOR r <- 1 TO 3\n   total <- 0\n   FOR c <- 1 TO 3\n      total <- total + G[r, c]\n   NEXT c\n   OUTPUT "Row ", r, " = ", total\nNEXT r',
+      tests: [{ stdin: ['1','2','3','4','5','6','7','8','9'] }, { stdin: ['0','0','0','10','10','10','1','2','3'] }],
+      hint: 'Use nested loops to read the grid, then nested loops again to total each row.'
+    },
+    {
+      id: 'q-as-record', level: 'AS', topic: 'Records',
+      title: 'Student record',
+      prompt: '<p>Define a record with <code>Name</code> (STRING) and <code>Age</code> (INTEGER). Read a name then an age into a record variable, and output <code>Name is Age years old</code>.</p>',
+      starter: 'TYPE Student\n   DECLARE Name : STRING\n   DECLARE Age : INTEGER\nENDTYPE\nDECLARE p : Student\n// read into p.Name and p.Age, then output the sentence\n',
+      solution: 'TYPE Student\n   DECLARE Name : STRING\n   DECLARE Age : INTEGER\nENDTYPE\nDECLARE p : Student\nINPUT p.Name\nINPUT p.Age\nOUTPUT p.Name, " is ", p.Age, " years old"',
+      tests: [{ stdin: ['Leroy','16'] }, { stdin: ['Ada','12'] }],
+      hint: 'Use dot notation: INPUT p.Name then INPUT p.Age, then OUTPUT them in the sentence.'
+    },
+
+    /* -------- A2 -------- */
+    {
+      id: 'q-a2-factorial', level: 'A2', topic: 'Recursion',
+      title: 'Recursive factorial',
+      prompt: '<p>Write a <strong>recursive</strong> function <code>Factorial(n)</code> that returns n!. The grader calls it with an input value.</p>',
+      starter: 'FUNCTION Factorial(n : INTEGER) RETURNS INTEGER\n   // base case + recursive case\n\nENDFUNCTION',
+      solution: 'FUNCTION Factorial(n : INTEGER) RETURNS INTEGER\n   IF n <= 1 THEN\n      RETURN 1\n   ELSE\n      RETURN n * Factorial(n - 1)\n   ENDIF\nENDFUNCTION',
+      append: '\nDECLARE k : INTEGER\nINPUT k\nOUTPUT Factorial(k)',
+      tests: [{ stdin: ['1'] }, { stdin: ['5'] }, { stdin: ['7'] }],
+      hint: 'Base case: n <= 1 returns 1. Recursive case: return n * Factorial(n - 1).'
+    },
+    {
+      id: 'q-a2-fib', level: 'A2', topic: 'Recursion',
+      title: 'Recursive Fibonacci',
+      prompt: '<p>Write a recursive function <code>Fib(n)</code> where <code>Fib(1)=1</code>, <code>Fib(2)=1</code>, and <code>Fib(n)=Fib(n-1)+Fib(n-2)</code>. The grader inputs n and outputs <code>Fib(n)</code>.</p>',
+      starter: 'FUNCTION Fib(n : INTEGER) RETURNS INTEGER\n   // two base cases, one recursive case\n\nENDFUNCTION',
+      solution: 'FUNCTION Fib(n : INTEGER) RETURNS INTEGER\n   IF n <= 2 THEN\n      RETURN 1\n   ELSE\n      RETURN Fib(n - 1) + Fib(n - 2)\n   ENDIF\nENDFUNCTION',
+      append: '\nDECLARE k : INTEGER\nINPUT k\nOUTPUT Fib(k)',
+      tests: [{ stdin: ['1'] }, { stdin: ['7'] }, { stdin: ['10'] }],
+      hint: 'Return 1 when n <= 2; otherwise return Fib(n-1) + Fib(n-2).'
+    },
+    {
+      id: 'q-a2-binsearch', level: 'A2', topic: 'Searching',
+      title: 'Binary search',
+      prompt: '<p>Read <code>n</code>, then <code>n</code> integers <em>already in ascending order</em>, then a target. Use binary search to output <code>Found at X</code> (1-based) or <code>Not found</code>.</p>',
+      starter: 'DECLARE n : INTEGER\nINPUT n\nDECLARE A : ARRAY[1:100] OF INTEGER\nDECLARE i : INTEGER\nFOR i <- 1 TO n\n   INPUT A[i]\nNEXT i\nDECLARE target : INTEGER\nINPUT target\n// binary search using Low / High pointers\n',
+      solution: 'DECLARE n : INTEGER\nINPUT n\nDECLARE A : ARRAY[1:100] OF INTEGER\nDECLARE i : INTEGER\nFOR i <- 1 TO n\n   INPUT A[i]\nNEXT i\nDECLARE target : INTEGER\nINPUT target\nDECLARE low : INTEGER\nDECLARE high : INTEGER\nDECLARE mid : INTEGER\nDECLARE found : BOOLEAN\nlow <- 1\nhigh <- n\nfound <- FALSE\nWHILE low <= high AND found = FALSE\n   mid <- (low + high) DIV 2\n   IF A[mid] = target THEN\n      found <- TRUE\n      OUTPUT "Found at ", mid\n   ELSE\n      IF A[mid] < target THEN\n         low <- mid + 1\n      ELSE\n         high <- mid - 1\n      ENDIF\n   ENDIF\nENDWHILE\nIF found = FALSE THEN\n   OUTPUT "Not found"\nENDIF',
+      tests: [{ stdin: ['7','2','4','6','8','10','12','14','10'] }, { stdin: ['7','2','4','6','8','10','12','14','5'] }, { stdin: ['5','1','3','5','7','9','1'] }],
+      hint: 'Use low and high pointers; mid = (low + high) DIV 2. Move low or high depending on the comparison.'
+    },
+    {
+      id: 'q-a2-insertion', level: 'A2', topic: 'Sorting',
+      title: 'Insertion sort',
+      prompt: '<p>Read <code>n</code>, then <code>n</code> integers. Sort them ascending using an <strong>insertion sort</strong> and output them one per line.</p>',
+      starter: 'DECLARE n : INTEGER\nINPUT n\nDECLARE A : ARRAY[1:100] OF INTEGER\nDECLARE i : INTEGER\nFOR i <- 1 TO n\n   INPUT A[i]\nNEXT i\n// insertion sort, then output\n',
+      solution: 'DECLARE n : INTEGER\nINPUT n\nDECLARE A : ARRAY[1:100] OF INTEGER\nDECLARE i : INTEGER\nDECLARE j : INTEGER\nDECLARE key : INTEGER\nFOR i <- 1 TO n\n   INPUT A[i]\nNEXT i\nFOR i <- 2 TO n\n   key <- A[i]\n   j <- i - 1\n   WHILE j >= 1 AND A[j] > key\n      A[j+1] <- A[j]\n      j <- j - 1\n   ENDWHILE\n   A[j+1] <- key\nNEXT i\nFOR i <- 1 TO n\n   OUTPUT A[i]\nNEXT i',
+      tests: [{ stdin: ['5','5','2','9','1','6'] }, { stdin: ['4','4','3','2','1'] }, { stdin: ['3','1','2','3'] }],
+      hint: 'For each element from the 2nd, hold it as key and shift larger earlier elements right until key fits.'
+    },
+    {
+      id: 'q-a2-stack', level: 'A2', topic: 'ADT · Stack',
+      title: 'Reverse with a stack',
+      prompt: '<p>Read <code>n</code>, then <code>n</code> integers. Push each onto a stack (an array with a <code>Top</code> pointer), then pop them all, outputting each on its own line — i.e. in reverse order.</p>',
+      starter: 'DECLARE stack : ARRAY[1:100] OF INTEGER\nDECLARE top : INTEGER\nDECLARE n : INTEGER\nDECLARE i : INTEGER\nDECLARE v : INTEGER\ntop <- 0\nINPUT n\n// push n values then pop them all\n',
+      solution: 'DECLARE stack : ARRAY[1:100] OF INTEGER\nDECLARE top : INTEGER\nDECLARE n : INTEGER\nDECLARE i : INTEGER\nDECLARE v : INTEGER\ntop <- 0\nINPUT n\nFOR i <- 1 TO n\n   INPUT v\n   top <- top + 1\n   stack[top] <- v\nNEXT i\nWHILE top > 0\n   OUTPUT stack[top]\n   top <- top - 1\nENDWHILE',
+      tests: [{ stdin: ['3','10','20','30'] }, { stdin: ['5','1','2','3','4','5'] }, { stdin: ['1','99'] }],
+      hint: 'Push: top <- top + 1 then stack[top] <- v. Pop: output stack[top] then top <- top - 1, while top > 0.'
+    },
+    {
+      id: 'q-a2-queue', level: 'A2', topic: 'ADT · Queue',
+      title: 'Process a queue (FIFO)',
+      prompt: '<p>Read <code>n</code>, then <code>n</code> integers. Enqueue them all, then dequeue them all, outputting each as it is served — i.e. in the <em>same</em> order they arrived.</p>',
+      starter: 'DECLARE q : ARRAY[1:100] OF INTEGER\nDECLARE front : INTEGER\nDECLARE rear : INTEGER\nDECLARE n : INTEGER\nDECLARE i : INTEGER\nDECLARE v : INTEGER\nfront <- 1\nrear <- 0\nINPUT n\n// enqueue n values, then dequeue them all\n',
+      solution: 'DECLARE q : ARRAY[1:100] OF INTEGER\nDECLARE front : INTEGER\nDECLARE rear : INTEGER\nDECLARE n : INTEGER\nDECLARE i : INTEGER\nDECLARE v : INTEGER\nfront <- 1\nrear <- 0\nINPUT n\nFOR i <- 1 TO n\n   INPUT v\n   rear <- rear + 1\n   q[rear] <- v\nNEXT i\nWHILE front <= rear\n   OUTPUT q[front]\n   front <- front + 1\nENDWHILE',
+      tests: [{ stdin: ['3','10','20','30'] }, { stdin: ['4','7','8','9','10'] }, { stdin: ['1','42'] }],
+      hint: 'Enqueue: rear <- rear + 1 then q[rear] <- v. Dequeue: output q[front] then front <- front + 1, while front <= rear.'
+    },
+    {
+      id: 'q-a2-account', level: 'A2', topic: 'OOP',
+      title: 'BankAccount class',
+      prompt: '<p>Define a class <code>BankAccount</code> with a private <code>Balance</code> (starting at 0), a constructor, a <code>Deposit(amount)</code> method and a <code>Withdraw(amount)</code> method (which must not let the balance go below 0). Then: create an account, read a series of operations and output the final balance as <code>Balance = X</code>.</p><p>Input format: first a number of operations <code>m</code>, then <code>m</code> lines each being a word (<code>D</code> or <code>W</code>) and you read the amount on the next line.</p>',
+      starter: 'CLASS BankAccount\n   PRIVATE Balance : INTEGER\n   // constructor, Deposit, Withdraw, GetBalance\nENDCLASS\nDECLARE acc : BankAccount\nacc <- NEW BankAccount()\nDECLARE m : INTEGER\nDECLARE i : INTEGER\nDECLARE op : STRING\nDECLARE amt : INTEGER\nINPUT m\n// process m operations, then output the balance\n',
+      solution: 'CLASS BankAccount\n   PRIVATE Balance : INTEGER\n   PUBLIC PROCEDURE NEW()\n      Balance <- 0\n   ENDPROCEDURE\n   PUBLIC PROCEDURE Deposit(amount : INTEGER)\n      Balance <- Balance + amount\n   ENDPROCEDURE\n   PUBLIC PROCEDURE Withdraw(amount : INTEGER)\n      IF amount <= Balance THEN\n         Balance <- Balance - amount\n      ENDIF\n   ENDPROCEDURE\n   PUBLIC FUNCTION GetBalance() RETURNS INTEGER\n      RETURN Balance\n   ENDFUNCTION\nENDCLASS\nDECLARE acc : BankAccount\nacc <- NEW BankAccount()\nDECLARE m : INTEGER\nDECLARE i : INTEGER\nDECLARE op : STRING\nDECLARE amt : INTEGER\nINPUT m\nFOR i <- 1 TO m\n   INPUT op\n   INPUT amt\n   IF op = "D" THEN\n      acc.Deposit(amt)\n   ELSE\n      acc.Withdraw(amt)\n   ENDIF\nNEXT i\nOUTPUT "Balance = ", acc.GetBalance()',
+      tests: [{ stdin: ['3','D','100','D','50','W','30'] }, { stdin: ['2','D','40','W','100'] }, { stdin: ['1','D','75'] }],
+      hint: 'Withdraw should only subtract if amount <= Balance. Read op then amt for each of the m operations.'
+    },
+    {
+      id: 'q-a2-linkedlist', level: 'A2', topic: 'ADT · Linked List',
+      title: 'Traverse a linked list',
+      prompt: '<p>A linked list is stored as an array of records with <code>Data</code> and <code>Pointer</code> fields. Read <code>n</code>, then <code>n</code> data values (store them so node <code>i</code> points to node <code>i+1</code>, and the last points to 0, with Head = 1). Then traverse from Head, outputting each value on its own line.</p>',
+      starter: 'TYPE Node\n   DECLARE Data : INTEGER\n   DECLARE Pointer : INTEGER\nENDTYPE\nDECLARE List : ARRAY[1:100] OF Node\nDECLARE n : INTEGER\nDECLARE i : INTEGER\nDECLARE Head : INTEGER\nINPUT n\n// build the chain, set Head, then traverse\n',
+      solution: 'TYPE Node\n   DECLARE Data : INTEGER\n   DECLARE Pointer : INTEGER\nENDTYPE\nDECLARE List : ARRAY[1:100] OF Node\nDECLARE n : INTEGER\nDECLARE i : INTEGER\nDECLARE Head : INTEGER\nINPUT n\nFOR i <- 1 TO n\n   INPUT List[i].Data\n   IF i < n THEN\n      List[i].Pointer <- i + 1\n   ELSE\n      List[i].Pointer <- 0\n   ENDIF\nNEXT i\nHead <- 1\nDECLARE Current : INTEGER\nCurrent <- Head\nWHILE Current <> 0\n   OUTPUT List[Current].Data\n   Current <- List[Current].Pointer\nENDWHILE',
+      tests: [{ stdin: ['3','10','20','30'] }, { stdin: ['1','5'] }, { stdin: ['4','4','3','2','1'] }],
+      hint: 'Node i links to i+1, except the last links to 0. Traverse with a Current pointer until it is 0.'
+    }
+  ];
+
+  var CONTENT = { lessons: lessons, practice: practice };
+  if (typeof module !== 'undefined' && module.exports) module.exports = CONTENT;
+  global.PSEUDO_CONTENT = CONTENT;
+
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* ===================== PseudoLab front-end ===================== */
+(function () {
+  'use strict';
+  var E = window.PseudoEngine;
+  var C = window.PSEUDO_CONTENT;
+  var LS = window.localStorage;
+  var $ = function (sel, root) { return (root || document).querySelector(sel); };
+  var ce = function (tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  /* ---------------- syntax highlighter (display only) ---------------- */
+  var HL_KW = ['DECLARE','CONSTANT','ARRAY','OF','IF','THEN','ELSE','ENDIF','CASE','OTHERWISE','ENDCASE',
+    'FOR','TO','STEP','NEXT','WHILE','DO','ENDWHILE','REPEAT','UNTIL','PROCEDURE','ENDPROCEDURE','FUNCTION',
+    'RETURNS','RETURN','ENDFUNCTION','CALL','BYREF','BYVAL','INPUT','OUTPUT','PRINT','TYPE','ENDTYPE','SET',
+    'DEFINE','DIV','MOD','AND','OR','NOT','OPENFILE','READFILE','WRITEFILE','CLOSEFILE','SEEK','GETRECORD',
+    'PUTRECORD','CLASS','ENDCLASS','INHERITS','PUBLIC','PRIVATE','NEW','SUPER','FOR','READ','WRITE','APPEND','RANDOM'];
+  var HL_TYPE = ['INTEGER','REAL','CHAR','STRING','BOOLEAN','DATE'];
+  var HL_FN = ['LENGTH','LEFT','RIGHT','MID','SUBSTRING','UCASE','LCASE','TO_UPPER','TO_LOWER','ASC','CHR',
+    'INT','ROUND','RAND','RANDOM','DIV','MOD','EOF','NUM_TO_STR','STR_TO_NUM'];
+  var KWset = {}, TYset = {}, FNset = {};
+  HL_KW.forEach(function (k) { KWset[k] = 1; });
+  HL_TYPE.forEach(function (k) { TYset[k] = 1; });
+  HL_FN.forEach(function (k) { FNset[k] = 1; });
+
+  function highlight(code) {
+    var out = '', i = 0, n = code.length;
+    function isW(c) { return /[A-Za-z0-9_]/.test(c); }
+    while (i < n) {
+      var c = code[i];
+      // comment
+      if (c === '/' && code[i + 1] === '/') {
+        var j = i; while (j < n && code[j] !== '\n') j++;
+        out += '<span class="t-com">' + esc(code.slice(i, j)) + '</span>'; i = j; continue;
+      }
+      // string
+      if (c === '"') {
+        var k = i + 1; while (k < n && code[k] !== '"' && code[k] !== '\n') k++;
+        if (code[k] === '"') k++;
+        out += '<span class="t-str">' + esc(code.slice(i, k)) + '</span>'; i = k; continue;
+      }
+      // char
+      if (c === "'") {
+        var m = i + 1; while (m < n && code[m] !== "'" && code[m] !== '\n') m++;
+        if (code[m] === "'") m++;
+        out += '<span class="t-str">' + esc(code.slice(i, m)) + '</span>'; i = m; continue;
+      }
+      // number
+      if (c >= '0' && c <= '9') {
+        var p = i; while (p < n && /[0-9.]/.test(code[p])) p++;
+        out += '<span class="t-num">' + esc(code.slice(i, p)) + '</span>'; i = p; continue;
+      }
+      // word
+      if (/[A-Za-z_]/.test(c)) {
+        var q = i; while (q < n && isW(code[q])) q++;
+        var w = code.slice(i, q), up = w.toUpperCase();
+        // peek next non-space for '(' to detect function calls
+        var r = q; while (r < n && code[r] === ' ') r++;
+        var cls = '';
+        if (up === 'TRUE' || up === 'FALSE') cls = 't-bool';
+        else if (TYset[up]) cls = 't-type';
+        else if (KWset[up]) cls = 't-kw';
+        else if (FNset[up] && code[r] === '(') cls = 't-fn';
+        else if (code[r] === '(') cls = 't-fn';
+        out += cls ? '<span class="' + cls + '">' + esc(w) + '</span>' : esc(w);
+        i = q; continue;
+      }
+      // assignment <- or <--
+      if (c === '<' && code[i + 1] === '-') {
+        var len = code[i + 2] === '-' ? 3 : 2;
+        out += '<span class="t-op">' + esc(code.substr(i, len)) + '</span>'; i += len; continue;
+      }
+      if ('+-*/=<>&^:.,()[]'.indexOf(c) !== -1) {
+        out += '<span class="t-op">' + esc(c) + '</span>'; i++; continue;
+      }
+      out += esc(c); i++;
+    }
+    return out + '\n';
+  }
+
+  /* ---------------- code editor widget ---------------- */
+  function CodeEditor(host, opts) {
+    opts = opts || {};
+    this.host = host;
+    host.classList.add('editor');
+    host.innerHTML = '';
+    this.gutter = ce('div', 'gutter');
+    this.wrap = ce('div', 'code-wrap');
+    this.pre = ce('pre', 'hl'); this.code = ce('code'); this.pre.appendChild(this.code);
+    this.ta = ce('textarea'); this.ta.setAttribute('spellcheck', 'false');
+    this.ta.setAttribute('wrap', 'off'); this.ta.setAttribute('autocapitalize', 'off');
+    this.ta.setAttribute('autocomplete', 'off'); this.ta.setAttribute('autocorrect', 'off');
+    if (opts.placeholder) this.ta.placeholder = opts.placeholder;
+    this.wrap.appendChild(this.pre); this.wrap.appendChild(this.ta);
+    host.appendChild(this.gutter); host.appendChild(this.wrap);
+    this.onRun = opts.onRun; this.onChange = opts.onChange;
+    var self = this;
+    this.ta.addEventListener('input', function () { self.render(); if (self.onChange) self.onChange(self.getValue()); });
+    this.ta.addEventListener('scroll', function () {
+      self.pre.scrollTop = self.ta.scrollTop; self.pre.scrollLeft = self.ta.scrollLeft;
+      self.gutter.scrollTop = self.ta.scrollTop;
+    });
+    this.ta.addEventListener('keydown', function (e) { self.onKey(e); });
+    this.setValue(opts.value || '');
+  }
+  CodeEditor.prototype.getValue = function () { return this.ta.value; };
+  CodeEditor.prototype.setValue = function (v) { this.ta.value = v; this.render(); };
+  CodeEditor.prototype.focus = function () { this.ta.focus(); };
+  CodeEditor.prototype.render = function () {
+    var v = this.ta.value;
+    this.code.innerHTML = highlight(v);
+    var lines = v.split('\n').length;
+    var g = ''; for (var i = 1; i <= lines; i++) g += i + '\n';
+    this.gutter.textContent = g;
+    this.pre.scrollTop = this.ta.scrollTop; this.pre.scrollLeft = this.ta.scrollLeft;
+  };
+  CodeEditor.prototype.onKey = function (e) {
+    var ta = this.ta;
+    // run shortcut
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (this.onRun) this.onRun(); return; }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var s = ta.selectionStart, en = ta.selectionEnd, val = ta.value;
+      if (s !== en && val.slice(s, en).indexOf('\n') !== -1) {
+        // indent selected lines
+        var ls = val.lastIndexOf('\n', s - 1) + 1;
+        var block = val.slice(ls, en);
+        var indented = block.replace(/^/gm, '   ');
+        ta.value = val.slice(0, ls) + indented + val.slice(en);
+        ta.selectionStart = s + 3; ta.selectionEnd = en + (indented.length - block.length);
+      } else {
+        ta.value = val.slice(0, s) + '   ' + val.slice(en);
+        ta.selectionStart = ta.selectionEnd = s + 3;
+      }
+      this.render(); if (this.onChange) this.onChange(this.getValue()); return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      var p = ta.selectionStart, value = ta.value;
+      var lineStart = value.lastIndexOf('\n', p - 1) + 1;
+      var line = value.slice(lineStart, p);
+      var indent = (line.match(/^\s*/) || [''])[0];
+      var trimmed = line.trim().toUpperCase();
+      var extra = '';
+      if (/\bTHEN$/.test(trimmed) || trimmed === 'ELSE' || /\bDO$/.test(trimmed) || trimmed === 'REPEAT' ||
+          /^FOR\b/.test(trimmed) || /^WHILE\b/.test(trimmed) || /^PROCEDURE\b/.test(trimmed) ||
+          /^FUNCTION\b/.test(trimmed) || /^CASE OF\b/.test(trimmed) || /^CLASS\b/.test(trimmed) ||
+          /^TYPE\b/.test(trimmed) || trimmed.indexOf('OTHERWISE') === 0 || /:$/.test(trimmed)) extra = '   ';
+      var ins = '\n' + indent + extra;
+      ta.value = value.slice(0, p) + ins + value.slice(ta.selectionEnd);
+      ta.selectionStart = ta.selectionEnd = p + ins.length;
+      this.render(); if (this.onChange) this.onChange(this.getValue());
+      ta.scrollTop = ta.scrollTop; this.pre.scrollTop = ta.scrollTop; return;
+    }
+  };
+
+  /* ---------------- runner ---------------- */
+  function parseFiles(text) {
+    var files = {}, cur = null, lines = (text || '').split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].match(/^###\s+(.+?)\s*$/);
+      if (m) { cur = m[1]; files[cur] = []; }
+      else if (cur != null) files[cur].push(lines[i]);
+    }
+    var out = {}; for (var k in files) if (files.hasOwnProperty(k)) out[k] = files[k].join('\n');
+    return out;
+  }
+  function inputQueue(text) {
+    if (text == null || text === '') return [];
+    return text.replace(/\n$/, '').split('\n');
+  }
+  function execute(source, stdinText, filesText) {
+    var q = inputQueue(stdinText);
+    var events = [];
+    var r = E.run(source, {
+      output: function (s) { events.push({ kind: 'out', text: s }); },
+      input: function () { return q.length ? q.shift() : null; },
+      files: parseFiles(filesText),
+      maxSteps: 1500000
+    });
+    if (!r.ok && r.error) events.push({ kind: 'err', text: 'Error' + (r.error.line ? ' (line ' + r.error.line + ')' : '') + ': ' + r.error.message });
+    return { ok: r.ok, events: events, error: r.error };
+  }
+  function renderConsole(pre, events, footer) {
+    pre.innerHTML = '';
+    var frag = document.createDocumentFragment();
+    events.forEach(function (ev) {
+      if (ev.kind === 'err') { var s = ce('span', 'ln-err'); s.textContent = ev.text; frag.appendChild(s); frag.appendChild(document.createTextNode('\n')); }
+      else if (ev.kind === 'info') { var s2 = ce('span', 'ln-info'); s2.textContent = ev.text; frag.appendChild(s2); frag.appendChild(document.createTextNode('\n')); }
+      else { frag.appendChild(document.createTextNode(ev.text + '\n')); }
+    });
+    if (footer) { var f = ce('span', 'ln-info'); f.textContent = footer; frag.appendChild(f); }
+    pre.appendChild(frag);
+    pre.scrollTop = pre.scrollHeight;
+  }
+  function gradeNormalize(text) {
+    return text.split('\n').map(function (l) { return l.replace(/\s+$/, ''); }).join('\n').replace(/\n+$/, '');
+  }
+  function outputText(events) { return events.filter(function (e) { return e.kind === 'out'; }).map(function (e) { return e.text; }).join('\n'); }
+
+  /* ---------------- tab switching ---------------- */
+  function switchView(name) {
+    var tabs = document.querySelectorAll('.tab');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.view === name);
+    ['editor', 'learn', 'practice', 'reference'].forEach(function (v) {
+      $('#view-' + v).classList.toggle('active', v === name);
+    });
+    if (name === 'editor' && window.__playground) window.__playground.focus();
+  }
+
+  /* ============================ PLAYGROUND ============================ */
+  var DEFAULT_CODE =
+    '// Welcome to PseudoLab — a CIE pseudocode editor.\n' +
+    '// Press  Run ▶  (or Ctrl/Cmd + Enter) to execute.\n\n' +
+    'DECLARE Name : STRING\n' +
+    'OUTPUT "What is your name?"\n' +
+    'INPUT Name\n' +
+    'OUTPUT "Hello, ", Name, "! Let\'s learn pseudocode."\n\n' +
+    'DECLARE i : INTEGER\n' +
+    'FOR i <- 1 TO 5\n' +
+    '   OUTPUT i, " squared is ", i * i\n' +
+    'NEXT i';
+
+  function buildPlayground() {
+    var view = $('#view-editor');
+    view.innerHTML =
+      '<div class="split">' +
+        '<div class="left">' +
+          '<div class="toolbar">' +
+            '<button class="btn primary" id="pg-run">▶ Run</button>' +
+            '<button class="btn ghost" id="pg-clear">Clear output</button>' +
+            '<select class="btn" id="pg-examples"><option value="">Load example…</option></select>' +
+            '<span class="spacer"></span>' +
+            '<button class="btn ghost" id="pg-reset" title="Reset to the welcome program">Reset</button>' +
+          '</div>' +
+          '<div class="editor-shell" style="flex:1; min-height:0;"><div id="pg-editor" style="flex:1;min-height:0;"></div></div>' +
+        '</div>' +
+        '<div class="right">' +
+          '<div class="io-tabs">' +
+            '<button class="io-tab active" data-io="out">Output</button>' +
+            '<button class="io-tab" data-io="in">Input</button>' +
+            '<button class="io-tab" data-io="files">Files</button>' +
+          '</div>' +
+          '<div class="io-panel active" data-io="out"><pre class="console" id="pg-console"></pre></div>' +
+          '<div class="io-panel" data-io="in">' +
+            '<div class="io-hint">One value per line. Each <code>INPUT</code> reads the next line in order.</div>' +
+            '<textarea class="io-area" id="pg-input" placeholder="e.g.\nAlice\n42"></textarea>' +
+          '</div>' +
+          '<div class="io-panel" data-io="files">' +
+            '<div class="io-hint">Define virtual files for <code>OPENFILE … FOR READ</code>. Start each file with <code>### filename</code>.</div>' +
+            '<textarea class="io-area" id="pg-files" placeholder="### data.txt\nfirst line\nsecond line"></textarea>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    var saved = LS.getItem('pg.code');
+    var editor = new CodeEditor($('#pg-editor'), {
+      value: saved != null ? saved : DEFAULT_CODE,
+      onRun: runPg,
+      onChange: function (v) { LS.setItem('pg.code', v); }
+    });
+    window.__playground = editor;
+
+    var savedIn = LS.getItem('pg.input'); if (savedIn != null) $('#pg-input').value = savedIn;
+    var savedFiles = LS.getItem('pg.files'); if (savedFiles != null) $('#pg-files').value = savedFiles;
+    $('#pg-input').addEventListener('input', function () { LS.setItem('pg.input', this.value); });
+    $('#pg-files').addEventListener('input', function () { LS.setItem('pg.files', this.value); });
+
+    // io tab switching
+    view.querySelectorAll('.io-tab').forEach(function (t) {
+      t.addEventListener('click', function () {
+        view.querySelectorAll('.io-tab').forEach(function (x) { x.classList.toggle('active', x === t); });
+        view.querySelectorAll('.io-panel').forEach(function (p) { p.classList.toggle('active', p.dataset.io === t.dataset.io); });
+      });
+    });
+
+    // examples dropdown
+    var sel = $('#pg-examples');
+    ['AS', 'A2'].forEach(function (lvl) {
+      var og = ce('optgroup'); og.label = lvl + ' examples';
+      C.lessons.filter(function (l) { return l.level === lvl; }).forEach(function (l) {
+        var o = ce('option'); o.value = l.id; o.textContent = l.topic + ' — ' + l.title; og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+    sel.addEventListener('change', function () {
+      var l = C.lessons.find(function (x) { return x.id === sel.value; });
+      if (l) { editor.setValue(l.example); LS.setItem('pg.code', l.example); editor.focus(); }
+      sel.value = '';
+    });
+
+    function runPg() {
+      var res = execute(editor.getValue(), $('#pg-input').value, $('#pg-files').value);
+      // switch to output panel
+      view.querySelectorAll('.io-tab').forEach(function (x) { x.classList.toggle('active', x.dataset.io === 'out'); });
+      view.querySelectorAll('.io-panel').forEach(function (p) { p.classList.toggle('active', p.dataset.io === 'out'); });
+      renderConsole($('#pg-console'), res.events, res.ok ? '▸ finished' : '▸ stopped with an error');
+    }
+    $('#pg-run').addEventListener('click', runPg);
+    $('#pg-clear').addEventListener('click', function () { $('#pg-console').innerHTML = ''; });
+    $('#pg-reset').addEventListener('click', function () {
+      if (confirm('Reset the editor to the welcome program?')) { editor.setValue(DEFAULT_CODE); LS.setItem('pg.code', DEFAULT_CODE); }
+    });
+  }
+
+  function loadIntoPlayground(code, run) {
+    window.__playground.setValue(code);
+    LS.setItem('pg.code', code);
+    switchView('editor');
+    if (run) $('#pg-run').click();
+    else window.__playground.focus();
+  }
+
+  /* ============================ LEARN ============================ */
+  var learnState = { level: 'All', current: null };
+  function buildLearn() {
+    var view = $('#view-learn');
+    view.innerHTML =
+      '<div class="with-sidebar">' +
+        '<div class="sidebar">' +
+          '<div class="level-filter" id="learn-filter"></div>' +
+          '<div id="learn-nav"></div>' +
+        '</div>' +
+        '<div class="content-pane"><div class="content-inner" id="learn-content"></div></div>' +
+      '</div>';
+    buildLevelFilter($('#learn-filter'), learnState, renderLearnNav);
+    renderLearnNav();
+    // open first lesson
+    var first = filteredLessons()[0];
+    if (first) showLesson(first.id);
+  }
+  function filteredLessons() {
+    return C.lessons.filter(function (l) { return learnState.level === 'All' || l.level === learnState.level; });
+  }
+  function renderLearnNav() {
+    var nav = $('#learn-nav'); nav.innerHTML = '';
+    ['AS', 'A2'].forEach(function (lvl) {
+      if (learnState.level !== 'All' && learnState.level !== lvl) return;
+      var items = C.lessons.filter(function (l) { return l.level === lvl; });
+      if (!items.length) return;
+      var g = ce('div', 'lesson-group'); g.appendChild(ce('h4', null, lvl + ' Level'));
+      items.forEach(function (l) {
+        var it = ce('div', 'nav-item'); it.dataset.id = l.id;
+        it.innerHTML = esc(l.title) + '<span class="topic">' + esc(l.topic) + '</span>';
+        if (learnState.current === l.id) it.classList.add('active');
+        it.addEventListener('click', function () { showLesson(l.id); });
+        g.appendChild(it);
+      });
+      nav.appendChild(g);
+    });
+  }
+  function showLesson(id) {
+    var l = C.lessons.find(function (x) { return x.id === id; });
+    if (!l) return;
+    learnState.current = id;
+    renderLearnNav();
+    var box = $('#learn-content');
+    box.innerHTML =
+      '<div class="eyebrow">' + esc(l.level) + ' · ' + esc(l.topic) + '</div>' +
+      '<h1>' + esc(l.title) + '</h1>' +
+      '<div class="lesson-body">' + l.html + '</div>' +
+      '<div class="example-card">' +
+        '<div class="ec-head"><span>EXAMPLE</span><div>' +
+          '<button class="btn ghost" id="ex-run">▶ Run example</button> ' +
+          '<button class="btn ghost" id="ex-open">Open in Playground</button>' +
+        '</div></div>' +
+        '<pre class="code-block"><code>' + highlight(l.example) + '</code></pre>' +
+        '<div class="io-panel active" style="display:none" id="ex-out-wrap"><pre class="console" id="ex-console" style="border-top:1px solid var(--border)"></pre></div>' +
+      '</div>';
+    box.scrollTop = 0;
+    $('#ex-open').addEventListener('click', function () { loadIntoPlayground(l.example, false); });
+    $('#ex-run').addEventListener('click', function () {
+      var needsInput = l.example.indexOf('INPUT') !== -1;
+      var stdin = '';
+      if (needsInput) { stdin = prompt('This example uses INPUT. Enter input values separated by commas (or leave blank):', '') || ''; stdin = stdin.split(',').join('\n'); }
+      var res = execute(l.example, stdin, '');
+      $('#ex-out-wrap').style.display = 'flex';
+      renderConsole($('#ex-console'), res.events, res.ok ? '▸ finished' : '▸ error');
+    });
+  }
+
+  /* ============================ PRACTICE ============================ */
+  var pracState = { level: 'All', current: null, editor: null };
+  function solvedSet() { try { return JSON.parse(LS.getItem('pr.solved') || '{}'); } catch (e) { return {}; } }
+  function markSolved(id) { var s = solvedSet(); s[id] = 1; LS.setItem('pr.solved', JSON.stringify(s)); }
+
+  function buildPractice() {
+    var view = $('#view-practice');
+    view.innerHTML =
+      '<div class="with-sidebar">' +
+        '<div class="sidebar">' +
+          '<div class="level-filter" id="prac-filter"></div>' +
+          '<div id="prac-nav"></div>' +
+        '</div>' +
+        '<div class="content-pane"><div class="content-inner" id="prac-content"></div></div>' +
+      '</div>';
+    buildLevelFilter($('#prac-filter'), pracState, renderPracNav);
+    renderPracNav();
+    var first = C.practice.filter(function (q) { return pracState.level === 'All' || q.level === pracState.level; })[0];
+    if (first) showQuestion(first.id);
+  }
+  function renderPracNav() {
+    var nav = $('#prac-nav'); nav.innerHTML = '';
+    var solved = solvedSet();
+    ['AS', 'A2'].forEach(function (lvl) {
+      if (pracState.level !== 'All' && pracState.level !== lvl) return;
+      var items = C.practice.filter(function (q) { return q.level === lvl; });
+      if (!items.length) return;
+      var g = ce('div', 'lesson-group'); g.appendChild(ce('h4', null, lvl + ' Level'));
+      items.forEach(function (q) {
+        var it = ce('div', 'nav-item'); it.dataset.id = q.id;
+        it.innerHTML = esc(q.title) + '<span class="topic">' + esc(q.topic) + '</span>';
+        if (solved[q.id]) it.classList.add('done');
+        if (pracState.current === q.id) it.classList.add('active');
+        it.addEventListener('click', function () { showQuestion(q.id); });
+        g.appendChild(it);
+      });
+      nav.appendChild(g);
+    });
+  }
+  function saveAttempt(id, code) { var a = {}; try { a = JSON.parse(LS.getItem('pr.attempts') || '{}'); } catch (e) {} a[id] = code; LS.setItem('pr.attempts', JSON.stringify(a)); }
+  function getAttempt(id) { try { return (JSON.parse(LS.getItem('pr.attempts') || '{}'))[id]; } catch (e) { return null; } }
+
+  function showQuestion(id) {
+    var q = C.practice.find(function (x) { return x.id === id; });
+    if (!q) return;
+    pracState.current = id;
+    renderPracNav();
+    var box = $('#prac-content');
+    box.innerHTML =
+      '<div class="q-meta"><span class="badge">' + esc(q.level) + '</span><span class="badge">' + esc(q.topic) + '</span></div>' +
+      '<h1>' + esc(q.title) + '</h1>' +
+      '<div class="q-prompt">' + q.prompt + '</div>' +
+      '<div class="toolbar" style="background:transparent;border:none;padding:0 0 10px 0">' +
+        '<button class="btn primary" id="pr-check">✓ Check answer</button>' +
+        '<button class="btn" id="pr-run">▶ Run</button>' +
+        '<button class="btn ghost" id="pr-hint">💡 Hint</button>' +
+        '<button class="btn ghost" id="pr-sol">Show solution</button>' +
+        '<button class="btn ghost" id="pr-reset">Reset</button>' +
+      '</div>' +
+      '<div class="practice-editor-wrap"><div id="pr-editor" style="flex:1;min-height:0;"></div></div>' +
+      '<div class="io-tabs" style="margin-top:10px;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0">' +
+        '<button class="io-tab active" data-pio="out">Output</button>' +
+        '<button class="io-tab" data-pio="in">Input (for manual Run)</button>' +
+      '</div>' +
+      '<div class="pio-panel" data-pio="out" style="border:1px solid var(--border);border-radius:0 0 8px 8px"><pre class="console" id="pr-console" style="max-height:200px"></pre></div>' +
+      '<div class="pio-panel" data-pio="in" style="display:none;border:1px solid var(--border);border-radius:0 0 8px 8px"><textarea class="io-area" id="pr-input" style="min-height:120px" placeholder="One value per line"></textarea></div>' +
+      '<div class="hint-box" id="pr-hintbox">' + esc(q.hint || 'Think about which construct fits, then build it step by step.') + '</div>' +
+      '<div class="solution-box" id="pr-solbox"><strong>Model solution</strong><pre><code>' + highlight(q.solution) + '</code></pre></div>' +
+      '<div class="grade-result" id="pr-grade"></div>';
+    box.scrollTop = 0;
+
+    var attempt = getAttempt(id);
+    pracState.editor = new CodeEditor($('#pr-editor'), {
+      value: attempt != null ? attempt : q.starter,
+      onRun: doRun,
+      onChange: function (v) { saveAttempt(id, v); }
+    });
+
+    box.querySelectorAll('.io-tab').forEach(function (t) {
+      t.addEventListener('click', function () {
+        box.querySelectorAll('.io-tab').forEach(function (x) { x.classList.toggle('active', x === t); });
+        box.querySelectorAll('.pio-panel').forEach(function (p) { p.style.display = (p.dataset.pio === t.dataset.pio) ? 'block' : 'none'; });
+      });
+    });
+
+    function doRun() {
+      var res = execute(pracState.editor.getValue() + (q.append || ''), $('#pr-input').value, '');
+      renderConsole($('#pr-console'), res.events, res.ok ? '▸ finished' : '▸ error');
+    }
+    $('#pr-run').addEventListener('click', doRun);
+    $('#pr-hint').addEventListener('click', function () { $('#pr-hintbox').classList.toggle('show'); });
+    $('#pr-sol').addEventListener('click', function () {
+      var sb = $('#pr-solbox');
+      if (!sb.classList.contains('show')) { if (!confirm('Reveal the model solution?')) return; }
+      sb.classList.toggle('show');
+    });
+    $('#pr-reset').addEventListener('click', function () {
+      if (confirm('Reset your code to the starter?')) { pracState.editor.setValue(q.starter); saveAttempt(id, q.starter); }
+    });
+    $('#pr-check').addEventListener('click', function () { gradeQuestion(q); });
+  }
+
+  function gradeQuestion(q) {
+    var userCode = pracState.editor.getValue() + (q.append || '');
+    var solCode = q.solution + (q.append || '');
+    var tests = q.tests || [];
+    var grade = $('#pr-grade');
+    if (!tests.length) {
+      grade.className = 'grade-result show';
+      grade.innerHTML = '<div class="grade-banner ok">This task is open-ended — compare your output with the model solution.</div>';
+      return;
+    }
+    var rows = '', allPass = true, firstFail = null;
+    for (var i = 0; i < tests.length; i++) {
+      var t = tests[i];
+      var exp = execute(solCode, (t.stdin || []).join('\n'), '');
+      var act = execute(userCode, (t.stdin || []).join('\n'), '');
+      var expOut = gradeNormalize(outputText(exp.events));
+      var actOut = act.ok ? gradeNormalize(outputText(act.events)) : '__ERROR__';
+      var ok = act.ok && expOut === actOut;
+      if (!ok && !firstFail) firstFail = { t: t, exp: expOut, act: act.ok ? actOut : ('(error) ' + (act.error ? act.error.message : '')), inp: (t.stdin || []).join(', ') };
+      if (!ok) allPass = false;
+      rows += '<div class="case-row"><span class="' + (ok ? 'res-ok' : 'res-bad') + '">' + (ok ? '✓ PASS' : '✗ FAIL') + '</span>' +
+        '<span style="color:var(--text-faint)">input:</span> <span>' + esc((t.stdin || []).join(', ') || '(none)') + '</span></div>';
+    }
+    grade.className = 'grade-result show';
+    var banner = allPass
+      ? '<div class="grade-banner ok">🎉 All ' + tests.length + ' test cases passed. Well done!</div>'
+      : '<div class="grade-banner bad">Not yet — ' + (tests.filter ? '' : '') + 'some test cases failed.</div>';
+    var diff = '';
+    if (!allPass && firstFail) {
+      diff = '<div class="diff-box"><div class="lbl">First failing case — input: ' + esc(firstFail.inp || '(none)') + '</div>' +
+        '<div class="lbl" style="margin-top:6px">Expected output:</div>' + esc(firstFail.exp || '(empty)') +
+        '<div class="lbl" style="margin-top:6px">Your output:</div>' + esc(firstFail.act || '(empty)') + '</div>';
+    }
+    grade.innerHTML = banner + '<div class="grade-cases">' + rows + diff + '</div>';
+    if (allPass) { markSolved(q.id); renderPracNav(); }
+  }
+
+  /* ============================ REFERENCE ============================ */
+  function buildReference() {
+    var view = $('#view-reference');
+    var cards = [
+      { h: 'Data types', rows: [['INTEGER', 'whole number, e.g. 5, -3'], ['REAL', 'fractional, e.g. 4.7, -0.5'], ['CHAR', "single char 'A'"], ['STRING', 'text "hello"'], ['BOOLEAN', 'TRUE / FALSE'], ['DATE', 'dd/mm/yyyy (A Level)']] },
+      { h: 'Assignment & I/O', rows: [['x <- v', 'assign (← )'], ['DECLARE x : T', 'declare variable'], ['CONSTANT k = v', 'constant'], ['INPUT x', 'read a value'], ['OUTPUT a, b', 'print values']] },
+      { h: 'Operators', rows: [['+  -  *  /', 'arithmetic ( / → REAL )'], ['DIV  MOD', 'integer ÷ and remainder'], ['=  <>  <  <=  >  >=', 'comparison → BOOLEAN'], ['AND  OR  NOT', 'logic'], ['&', 'string concatenation']] },
+      { h: 'Selection', rows: [['IF…THEN…ELSE…ENDIF', 'two-way choice'], ['CASE OF x … ENDCASE', 'multi-way'], ['v1 TO v2 :', 'range in CASE'], ['OTHERWISE :', 'default branch']] },
+      { h: 'Iteration', rows: [['FOR i <- a TO b … NEXT i', 'count-controlled'], ['STEP n', 'increment (may be -)'], ['WHILE c [DO] … ENDWHILE', 'pre-condition'], ['REPEAT … UNTIL c', 'post-condition']] },
+      { h: 'Subroutines', rows: [['PROCEDURE p(...) … ENDPROCEDURE', 'no return'], ['CALL p(...)', 'call procedure'], ['FUNCTION f(...) RETURNS T', 'returns a value'], ['RETURN v', 'return from function'], ['BYREF / BYVAL', 'parameter passing']] },
+      { h: 'String functions', rows: [['LENGTH(s)', 'number of chars'], ['LEFT(s,n) / RIGHT(s,n)', 'n chars from start / end'], ['MID(s,p,n)', 'n chars from position p'], ['UCASE(x) / LCASE(x)', 'change case'], ['s[p]', 'char at position p (from 1)']] },
+      { h: 'Numeric functions', rows: [['INT(x)', 'integer part (truncate)'], ['STRING_TO_NUM(s)', 'string → number'], ['ASC(c) / CHR(n)', 'char ↔ ASCII code'], ['x DIV y / x MOD y', 'integer ÷ and remainder'], ['RAND(x)', '0 ≤ r < x']] },
+      { h: 'Arrays & records', rows: [['ARRAY[1:n] OF T', '1-D array'], ['ARRAY[1:r,1:c] OF T', '2-D array'], ['TYPE R … ENDTYPE', 'record'], ['x.field', 'field access'], ['TYPE C = (A,B,C)', 'enumerated']] },
+      { h: 'File handling', rows: [['OPENFILE "f" FOR READ', 'text: open to read'], ['READFILE / WRITEFILE', 'read / write a line'], ['EOF("f")', 'end of file?'], ['OPENFILE "f" FOR RANDOM', 'random-access file'], ['SEEK / GETRECORD / PUTRECORD', 'direct record access']] },
+      { h: 'OOP (A2)', rows: [['CLASS C … ENDCLASS', 'define class'], ['PROCEDURE NEW(...)', 'constructor'], ['o <- NEW C(...)', 'create object'], ['CLASS D INHERITS C', 'inheritance'], ['SUPER.NEW(...)', 'parent constructor']] },
+      { h: 'AS vs A2 topics', rows: [['AS', 'constructs, arrays, records'], ['AS', 'text files, procedures/functions'], ['A2', 'recursion'], ['A2', 'ADTs: stack/queue/list/tree'], ['A2', 'random files, OOP']] }
+    ];
+    var html = '<div class="content-inner" style="max-width:1100px"><div class="eyebrow">Quick reference</div><h1>Pseudocode Cheat-Sheet</h1>' +
+      '<p style="color:var(--text-dim)">Cambridge International AS &amp; A Level Computer Science (9618) pseudocode.</p><div class="ref-grid">';
+    cards.forEach(function (c) {
+      html += '<div class="ref-card"><h3>' + esc(c.h) + '</h3><table>';
+      c.rows.forEach(function (r) { html += '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td></tr>'; });
+      html += '</table></div>';
+    });
+    html += '</div></div>';
+    view.innerHTML = html;
+  }
+
+  /* ---------------- shared: level filter ---------------- */
+  function buildLevelFilter(host, state, onChange) {
+    host.innerHTML = '';
+    ['All', 'AS', 'A2'].forEach(function (lvl) {
+      var c = ce('button', 'chip' + (state.level === lvl ? ' active' : '')); c.textContent = lvl;
+      c.addEventListener('click', function () {
+        state.level = lvl;
+        host.querySelectorAll('.chip').forEach(function (x) { x.classList.toggle('active', x.textContent === lvl); });
+        onChange();
+      });
+      host.appendChild(c);
+    });
+  }
+
+  /* ---------------- theme ---------------- */
+  function initTheme() {
+    var t = LS.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    $('#themeToggle').addEventListener('click', function () {
+      var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', cur); LS.setItem('theme', cur);
+    });
+  }
+
+  /* ---------------- init ---------------- */
+  function init() {
+    initTheme();
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.addEventListener('click', function () { switchView(t.dataset.view); });
+    });
+    buildPlayground();
+    buildLearn();
+    buildPractice();
+    buildReference();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
+</script>
+</body>
+</html>

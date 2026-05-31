@@ -1,0 +1,69 @@
+name: Deploy to GitHub Pages
+
+# Build the single-file site from src/ and publish it to GitHub Pages
+# on every push to main. Also runnable manually from the Actions tab.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Permissions required by the official Pages deployment actions
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment; newer runs cancel in-progress ones
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build single-file site (src/ -> index.html)
+        run: node build.js
+
+      - name: Run tests
+        run: node test/run_tests.js && node test/verify_content.js
+
+      - name: Assemble publish directory
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          # include the custom-domain file if present
+          if [ -f CNAME ]; then cp CNAME _site/CNAME; fi
+          # serve raw .html without a build step; add a 404 fallback to index
+          cp index.html _site/404.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          # auto-enable Pages (build type "workflow") on first run
+          enablement: true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
