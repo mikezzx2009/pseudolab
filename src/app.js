@@ -654,7 +654,7 @@
       html += '</table></div>';
     });
     html += '</div></div>';
-    view.innerHTML = html;
+    view.innerHTML = '<div class="content-pane">' + html + '</div>';
   }
 
   /* ---------------- shared: level filter ---------------- */
