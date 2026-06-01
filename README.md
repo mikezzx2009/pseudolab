@@ -33,7 +33,7 @@ PseudoLab turns the official Cambridge pseudocode (used in 9618 exam papers) int
 
 | | |
 |---|---|
-| 🖊️ **Playground** | A syntax‑highlighting editor with line numbers. Run your code with a real built‑in interpreter, feed it `INPUT` values, pre‑load virtual files, and see output instantly. `Ctrl/⌘ + Enter` to run. |
+| 🖊️ **Playground** | A syntax‑highlighting editor with line numbers and a real built‑in interpreter. An interactive **console** shows output and lets you type answers to `INPUT` inline, just like a terminal. Create virtual files (with a **+ New file** manager) for file‑handling programs. `Ctrl/⌘ + Enter` to run. |
 | 📚 **Learn** | 29 lessons grouped by **AS** and **A2**, each with clear notes, exam tips, the exact 9618 syntax, and a runnable example you can open in the Playground in one click. |
 | ✅ **Practice** | Original exam‑style questions by topic. Hit **Check answer** and your code is run against hidden test cases — instant pass/fail with the first failing case shown. Solved questions are ticked and your work is saved. |
 | 📖 **Reference** | A one‑page cheat‑sheet of every keyword, operator and built‑in function. |

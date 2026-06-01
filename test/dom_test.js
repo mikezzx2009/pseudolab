@@ -48,12 +48,31 @@ setTimeout(function () {
     var pgOut = doc.querySelector('#pg-console').textContent;
     check('playground produced 42', pgOut.indexOf('42') !== -1);
 
-    // ---- playground with input ----
+    // ---- interactive console: type input inline ----
     setEditor(pgTa, 'DECLARE n : INTEGER\nINPUT n\nOUTPUT n + 1');
-    doc.querySelector('#pg-input').value = '99';
-    fire(doc.querySelector('#pg-input'), 'input');
     doc.querySelector('#pg-run').click();
-    check('playground used input -> 100', doc.querySelector('#pg-console').textContent.indexOf('100') !== -1);
+    var ci = doc.querySelector('#pg-console .console-input');
+    check('interactive input line appears', ci != null);
+    if (ci) {
+      ci.value = '99';
+      ci.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      check('typed input produces 100', doc.querySelector('#pg-console').textContent.indexOf('100') !== -1);
+    }
+
+    // ---- files panel: create a file and read it ----
+    var filesTab = null;
+    doc.querySelectorAll('#view-editor .io-tab').forEach(function (t) { if (t.dataset.io === 'files') filesTab = t; });
+    filesTab.click();
+    doc.querySelector('#pg-files .btn.green').click(); // + New file
+    var fName = doc.querySelector('#pg-files .file-name');
+    var fBody = doc.querySelector('#pg-files .file-content');
+    check('file card created', fName != null && fBody != null);
+    fName.value = 'in.txt'; fire(fName, 'input');
+    fBody.value = 'alpha\nbeta'; fire(fBody, 'input');
+    setEditor(pgTa, 'DECLARE s : STRING\nOPENFILE "in.txt" FOR READ\nWHILE NOT EOF("in.txt")\n   READFILE "in.txt", s\n   OUTPUT UCASE(s)\nENDWHILE\nCLOSEFILE "in.txt"');
+    doc.querySelector('#pg-run').click();
+    var fileOut = doc.querySelector('#pg-console').textContent;
+    check('reads created file -> ALPHA/BETA', fileOut.indexOf('ALPHA') !== -1 && fileOut.indexOf('BETA') !== -1);
 
     // ---- syntax highlight rendered ----
     check('highlight spans present', doc.querySelector('#pg-editor .hl .t-kw') != null);

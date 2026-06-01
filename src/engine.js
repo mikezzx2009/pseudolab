@@ -1627,17 +1627,20 @@
       maxSteps: options.maxSteps,
       maxDepth: options.maxDepth
     });
-    var result = { ok: true, output: '', error: null, files: null };
+    var result = { ok: true, output: '', error: null, files: null, needInput: false };
     try {
       var tokens = tokenize(source);
       var ast = new Parser(tokens).parseProgram();
       interp.run(ast);
       result.files = interp.files;
     } catch (e) {
-      result.ok = false;
-      if (e instanceof PseudoError) result.error = { message: e.message, line: e.line };
+      if (e && e.__needInput) { result.ok = false; result.needInput = true; }
       else if (e && e.__return) { /* top-level RETURN */ }
-      else result.error = { message: (e && e.message) || String(e), line: null };
+      else {
+        result.ok = false;
+        if (e instanceof PseudoError) result.error = { message: e.message, line: e.line };
+        else result.error = { message: (e && e.message) || String(e), line: null };
+      }
     }
     if (!options.output) result.output = outBuf.join('\n') + (outBuf.length ? '\n' : '');
     return result;

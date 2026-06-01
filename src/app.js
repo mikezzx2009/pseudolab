@@ -197,6 +197,141 @@
   }
   function outputText(events) { return events.filter(function (e) { return e.kind === 'out'; }).map(function (e) { return e.text; }).join('\n'); }
 
+  /* ---------------- interactive console (terminal-style) ----------------
+   * Output and input share one surface. Because the interpreter runs
+   * synchronously, we use a deterministic "replay" model: each time the user
+   * supplies a line, we re-run the program from the start with all entered
+   * inputs. Output is regenerated identically (RNG is seeded per run), so the
+   * transcript grows smoothly and INPUTs are echoed inline like a real shell. */
+  function seededRandom(seed) {
+    var s = (seed >>> 0) || 1;
+    return function () {
+      s = (s + 0x6D2B79F5) | 0;
+      var t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function makeConsole(consoleEl) {
+    var st = { source: '', files: {}, inputs: [], seed: 1, append: '', onDone: null };
+
+    function executeOnce() {
+      var events = [], idx = 0;
+      var orig = Math.random;
+      Math.random = seededRandom(st.seed);
+      var NEED = { __needInput: true };
+      var r;
+      try {
+        r = E.run(st.source + st.append, {
+          output: function (s) { events.push({ kind: 'out', text: s }); },
+          input: function () {
+            if (idx < st.inputs.length) { var v = st.inputs[idx++]; events.push({ kind: 'in', text: v }); return v; }
+            throw NEED;
+          },
+          files: st.files,
+          maxSteps: 2000000
+        });
+      } finally { Math.random = orig; }
+      return { r: r, events: events };
+    }
+
+    function render(events, waiting, footer) {
+      consoleEl.innerHTML = '';
+      var frag = document.createDocumentFragment();
+      events.forEach(function (ev) {
+        if (ev.kind === 'in') { var si = ce('span', 'ln-input'); si.textContent = ev.text + '\n'; frag.appendChild(si); }
+        else if (ev.kind === 'err') { var se = ce('span', 'ln-err'); se.textContent = ev.text + '\n'; frag.appendChild(se); }
+        else frag.appendChild(document.createTextNode(ev.text + '\n'));
+      });
+      if (waiting) {
+        var line = ce('div', 'console-line');
+        var caret = ce('span', 'console-caret', '❯ ');
+        var inp = ce('input', 'console-input');
+        inp.type = 'text'; inp.setAttribute('autocomplete', 'off'); inp.setAttribute('spellcheck', 'false');
+        line.appendChild(caret); line.appendChild(inp);
+        frag.appendChild(line);
+        consoleEl.appendChild(frag);
+        inp.focus();
+        inp.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); st.inputs.push(inp.value); step(); }
+        });
+      } else {
+        if (footer) { var f = ce('span', 'ln-info'); f.textContent = footer; frag.appendChild(f); }
+        consoleEl.appendChild(frag);
+        if (st.onDone) st.onDone(events);
+      }
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function step() {
+      var res = executeOnce();
+      if (res.r.needInput) { render(res.events, true); }
+      else if (res.r.ok) { render(res.events, false, '❯ finished'); }
+      else {
+        if (res.r.error) res.events.push({ kind: 'err', text: 'Error' + (res.r.error.line ? ' (line ' + res.r.error.line + ')' : '') + ': ' + res.r.error.message });
+        render(res.events, false, '❯ stopped');
+      }
+    }
+
+    return {
+      run: function (source, files, opts) {
+        opts = opts || {};
+        st.source = source; st.files = files || {}; st.append = opts.append || '';
+        st.inputs = []; st.seed = (Date.now() & 0x7fffffff) || 1; st.onDone = opts.onDone || null;
+        step();
+      },
+      clear: function () { consoleEl.innerHTML = ''; }
+    };
+  }
+
+  /* ---------------- files panel (create / edit virtual files) ---------------- */
+  function makeFilesPanel(panelEl, storageKey) {
+    var files = [];
+    try { var saved = JSON.parse(LS.getItem(storageKey) || '[]'); if (Array.isArray(saved)) files = saved; } catch (e) {}
+
+    function persist() { LS.setItem(storageKey, JSON.stringify(files)); }
+
+    function render() {
+      panelEl.innerHTML = '';
+      var bar = ce('div', 'files-bar');
+      var add = ce('button', 'btn green', '+ New file');
+      bar.appendChild(add);
+      var hint = ce('span', 'files-hint', 'Files are available to <code>OPENFILE … FOR READ</code> when you Run.');
+      bar.appendChild(hint);
+      panelEl.appendChild(bar);
+      add.addEventListener('click', function () {
+        var n = files.length + 1;
+        files.push({ name: 'file' + n + '.txt', content: '' });
+        persist(); render();
+        var inputs = panelEl.querySelectorAll('.file-card .file-name');
+        if (inputs.length) inputs[inputs.length - 1].focus();
+      });
+
+      if (!files.length) {
+        var empty = ce('div', 'files-empty', 'No files yet. Click <b>+ New file</b> to create one.');
+        panelEl.appendChild(empty);
+        return;
+      }
+      files.forEach(function (f, i) {
+        var card = ce('div', 'file-card');
+        var head = ce('div', 'file-card-head');
+        var nameI = ce('input', 'file-name'); nameI.type = 'text'; nameI.value = f.name; nameI.placeholder = 'filename.txt';
+        var del = ce('button', 'file-del', '✕'); del.title = 'Delete file';
+        head.appendChild(nameI); head.appendChild(del);
+        var body = ce('textarea', 'file-content'); body.value = f.content; body.placeholder = 'file contents…';
+        card.appendChild(head); card.appendChild(body);
+        panelEl.appendChild(card);
+        nameI.addEventListener('input', function () { files[i].name = nameI.value; persist(); });
+        body.addEventListener('input', function () { files[i].content = body.value; persist(); });
+        del.addEventListener('click', function () { files.splice(i, 1); persist(); render(); });
+      });
+    }
+    render();
+    return {
+      getMap: function () { var m = {}; files.forEach(function (f) { if (f.name) m[f.name] = f.content; }); return m; }
+    };
+  }
+
   /* ---------------- tab switching ---------------- */
   function switchView(name) {
     var tabs = document.querySelectorAll('.tab');
@@ -236,19 +371,11 @@
         '</div>' +
         '<div class="right">' +
           '<div class="io-tabs">' +
-            '<button class="io-tab active" data-io="out">Output</button>' +
-            '<button class="io-tab" data-io="in">Input</button>' +
+            '<button class="io-tab active" data-io="console">Console</button>' +
             '<button class="io-tab" data-io="files">Files</button>' +
           '</div>' +
-          '<div class="io-panel active" data-io="out"><pre class="console" id="pg-console"></pre></div>' +
-          '<div class="io-panel" data-io="in">' +
-            '<div class="io-hint">One value per line. Each <code>INPUT</code> reads the next line in order.</div>' +
-            '<textarea class="io-area" id="pg-input" placeholder="e.g.\nAlice\n42"></textarea>' +
-          '</div>' +
-          '<div class="io-panel" data-io="files">' +
-            '<div class="io-hint">Define virtual files for <code>OPENFILE … FOR READ</code>. Start each file with <code>### filename</code>.</div>' +
-            '<textarea class="io-area" id="pg-files" placeholder="### data.txt\nfirst line\nsecond line"></textarea>' +
-          '</div>' +
+          '<div class="io-panel active" data-io="console"><div class="console" id="pg-console"></div></div>' +
+          '<div class="io-panel" data-io="files"><div class="files-panel" id="pg-files"></div></div>' +
         '</div>' +
       '</div>';
 
@@ -260,10 +387,8 @@
     });
     window.__playground = editor;
 
-    var savedIn = LS.getItem('pg.input'); if (savedIn != null) $('#pg-input').value = savedIn;
-    var savedFiles = LS.getItem('pg.files'); if (savedFiles != null) $('#pg-files').value = savedFiles;
-    $('#pg-input').addEventListener('input', function () { LS.setItem('pg.input', this.value); });
-    $('#pg-files').addEventListener('input', function () { LS.setItem('pg.files', this.value); });
+    var pgConsole = makeConsole($('#pg-console'));
+    var pgFiles = makeFilesPanel($('#pg-files'), 'pg.filesV2');
 
     // io tab switching
     view.querySelectorAll('.io-tab').forEach(function (t) {
@@ -288,15 +413,16 @@
       sel.value = '';
     });
 
+    function showConsole() {
+      view.querySelectorAll('.io-tab').forEach(function (x) { x.classList.toggle('active', x.dataset.io === 'console'); });
+      view.querySelectorAll('.io-panel').forEach(function (p) { p.classList.toggle('active', p.dataset.io === 'console'); });
+    }
     function runPg() {
-      var res = execute(editor.getValue(), $('#pg-input').value, $('#pg-files').value);
-      // switch to output panel
-      view.querySelectorAll('.io-tab').forEach(function (x) { x.classList.toggle('active', x.dataset.io === 'out'); });
-      view.querySelectorAll('.io-panel').forEach(function (p) { p.classList.toggle('active', p.dataset.io === 'out'); });
-      renderConsole($('#pg-console'), res.events, res.ok ? '▸ finished' : '▸ stopped with an error');
+      showConsole();
+      pgConsole.run(editor.getValue(), pgFiles.getMap());
     }
     $('#pg-run').addEventListener('click', runPg);
-    $('#pg-clear').addEventListener('click', function () { $('#pg-console').innerHTML = ''; });
+    $('#pg-clear').addEventListener('click', function () { pgConsole.clear(); });
     $('#pg-reset').addEventListener('click', function () {
       if (confirm('Reset the editor to the welcome program?')) { editor.setValue(DEFAULT_CODE); LS.setItem('pg.code', DEFAULT_CODE); }
     });
@@ -364,17 +490,14 @@
           '<button class="btn ghost" id="ex-open">Open in Playground</button>' +
         '</div></div>' +
         '<pre class="code-block"><code>' + highlight(l.example) + '</code></pre>' +
-        '<div class="io-panel active" style="display:none" id="ex-out-wrap"><pre class="console" id="ex-console" style="border-top:1px solid var(--border)"></pre></div>' +
+        '<div class="ex-console-wrap" style="display:none" id="ex-out-wrap"><div class="console" id="ex-console" style="border-top:1px solid var(--border)"></div></div>' +
       '</div>';
     box.scrollTop = 0;
+    var exConsole = makeConsole($('#ex-console'));
     $('#ex-open').addEventListener('click', function () { loadIntoPlayground(l.example, false); });
     $('#ex-run').addEventListener('click', function () {
-      var needsInput = l.example.indexOf('INPUT') !== -1;
-      var stdin = '';
-      if (needsInput) { stdin = prompt('This example uses INPUT. Enter input values separated by commas (or leave blank):', '') || ''; stdin = stdin.split(',').join('\n'); }
-      var res = execute(l.example, stdin, '');
-      $('#ex-out-wrap').style.display = 'flex';
-      renderConsole($('#ex-console'), res.events, res.ok ? '▸ finished' : '▸ error');
+      $('#ex-out-wrap').style.display = 'block';
+      exConsole.run(l.example, {});
     });
   }
 
@@ -438,12 +561,8 @@
         '<button class="btn ghost" id="pr-reset">Reset</button>' +
       '</div>' +
       '<div class="practice-editor-wrap"><div id="pr-editor" style="flex:1;min-height:0;"></div></div>' +
-      '<div class="io-tabs" style="margin-top:10px;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0">' +
-        '<button class="io-tab active" data-pio="out">Output</button>' +
-        '<button class="io-tab" data-pio="in">Input (for manual Run)</button>' +
-      '</div>' +
-      '<div class="pio-panel" data-pio="out" style="border:1px solid var(--border);border-radius:0 0 8px 8px"><pre class="console" id="pr-console" style="max-height:200px"></pre></div>' +
-      '<div class="pio-panel" data-pio="in" style="display:none;border:1px solid var(--border);border-radius:0 0 8px 8px"><textarea class="io-area" id="pr-input" style="min-height:120px" placeholder="One value per line"></textarea></div>' +
+      '<div class="console-label">Console — type answers to <code>INPUT</code> right here</div>' +
+      '<div class="console-wrap"><div class="console" id="pr-console" style="max-height:240px"></div></div>' +
       '<div class="hint-box" id="pr-hintbox">' + esc(q.hint || 'Think about which construct fits, then build it step by step.') + '</div>' +
       '<div class="solution-box" id="pr-solbox"><strong>Model solution</strong><pre><code>' + highlight(q.solution) + '</code></pre></div>' +
       '<div class="grade-result" id="pr-grade"></div>';
@@ -455,17 +574,10 @@
       onRun: doRun,
       onChange: function (v) { saveAttempt(id, v); }
     });
-
-    box.querySelectorAll('.io-tab').forEach(function (t) {
-      t.addEventListener('click', function () {
-        box.querySelectorAll('.io-tab').forEach(function (x) { x.classList.toggle('active', x === t); });
-        box.querySelectorAll('.pio-panel').forEach(function (p) { p.style.display = (p.dataset.pio === t.dataset.pio) ? 'block' : 'none'; });
-      });
-    });
+    var prConsole = makeConsole($('#pr-console'));
 
     function doRun() {
-      var res = execute(pracState.editor.getValue() + (q.append || ''), $('#pr-input').value, '');
-      renderConsole($('#pr-console'), res.events, res.ok ? '▸ finished' : '▸ error');
+      prConsole.run(pracState.editor.getValue(), {}, { append: q.append || '' });
     }
     $('#pr-run').addEventListener('click', doRun);
     $('#pr-hint').addEventListener('click', function () { $('#pr-hintbox').classList.toggle('show'); });
